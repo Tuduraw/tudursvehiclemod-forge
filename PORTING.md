@@ -25,9 +25,13 @@ tools/port/      生成ツール一式 (port.py / build_cross.py / rules.json / 
 LOOM_JAVA_HOME=/path/to/jdk21 python3 tools/port/port.py generate --mojmap ../tudursvehiclemod-mojmap
 
 # 2. Forge 版をビルド
-JAVA_HOME=/path/to/jdk17 ./gradlew build          # -> build/libs/tudursvehiclemod-<ver>.jar
+JAVA_HOME=/path/to/jdk17 ./gradlew build          # -> build/libs/tudursvehiclemod-1.1.1-forge-1.20.1.jar
 JAVA_HOME=/path/to/jdk17 ./gradlew harnessJar     # -> build/libs/tvmtest-forge-0.1.jar (テスト用)
 ```
+
+jar 名は `tudursvehiclemod-<mod_version>-<mod_loader>-<minecraft_version>.jar` です (`gradle.properties` の
+`mod_version`・`mod_loader`・`minecraft_version`)。`mods.toml` のバージョンは `mod_version` (`1.1.1`) のままです。
+Fabric 版 (`tudursvehiclemod-1.1.1-fabric-1.21.11.jar`) と同じ規則です。
 
 `port.py refresh` は Loom を動かさずに、前回の変換結果へ rules と patches だけを掛け直します
 (rules.json を変えたとき用)。作業フォルダは `.port/` (`gradlew clean` では消えません)。
@@ -88,6 +92,8 @@ mixin は他のソースと同様に生成・変換し、1.20.1 向けにパッ�
 
 ほかに `forge/mixin/BlockEntityLoadForgeMixin` で、ブロックエンティティがサーバーのチャンクに追加されたとき
 (チャンク読み込み・設置の両方) に `BLOCK_ENTITY_LOAD` を発火しています (Fabric API と同じタイミング)。
+`forge/mixin/client/MoveEntityCodecForgeMixin` は、自分が操縦している乗り物についても、サーバーから届く差分の位置の
+基準 (`VecDeltaCodec`) を更新します (1.21.2 以降のバニラと同じ動き。下記「修正 (2026-11-01、サーバー負荷の調査)」)。
 Forge では `@ModifyArgs` が使えない (生成クラスが読み込めない) ため、引数の書き換えは `@ModifyArg` で行っています。
 
 ## 試作で確認したこと (2026-10-31)
@@ -128,6 +134,30 @@ Forge では `@ModifyArgs` が使えない (生成クラスが読み込めない
     滑走路で運ばれている間とアドオンの外部制御中の扱いは従来どおり。どの処理もサーバースレッドでだけ行う
   - 確認 (`/tvmt subsetup`、潜航・旋回・浮上、Forge 版と Fabric 版): 引き戻しの警告 0 件、
     クライアントとサーバーの位置・姿勢は一致 (差は通信 1 tick 分のみ)
+
+## 修正 (2026-11-01、サーバー負荷の調査)
+
+報告: 専用サーバーで潜水艦を操縦中に武装が使えなくなる、降車直後に機体が手前へ戻ってから正しい位置へ飛ぶ。
+
+- 降車直後の巻き戻り (Forge 版のみ): 1.20.1 の `ClientPacketListener.handleMoveEntity` は、自分が操縦している乗り物への
+  移動パケットを丸ごと捨てるため、差分の位置の基準が搭乗時のまま止まる。降車して差分を受け取り始めた瞬間、古い基準から
+  計算した位置へ戻り、次の絶対位置の同期で正しい位置へ飛んでいた。1.21.11 は基準だけ更新するため起きない。
+  → `MoveEntityCodecForgeMixin` で同じ動きにした。確認: 降車の前後で位置が連続し、サーバーの位置と一致 (修正前は約 50 ブロック離れた
+  位置へ戻っていた)
+- 1.21.11 版と共通の修正 (Mojang 版から再生成で反映): 機体の向きの補間用の値 (`yRotO`) を毎 tick 上書きしていたため、
+  向きが補間されず旋回中に 1 tick ごとの段になっていた。旋回中に乗員の視点を回す処理も補間に含まれるようにした
+- 武装: テストで潜航中に魚雷が撃てなかったのは、魚雷の姿勢制限 (ピッチ・ロールが 15° を超えると発射不可、MCヘリと同じ仕様) による。
+  浮上して水平に戻ると発射できる。サーバーの遅れによる発射の取りこぼしは見られなかった
+- サーバー負荷 (専用サーバー + 同じマシンのクライアント、CPU 2 コア、JFR で計測):
+  - 乗っている間の 1 tick の平均は 4.6〜10.8 ms (上限 50 ms)。時々ある 60〜600 ms のスパイクは GC の停止で、
+    サーバーとソフトウェア描画のクライアントが 2 コアを取り合うこの環境によるもの
+  - サーバースレッドの時間の多くはバニラのチャンク処理 (周囲チャンクの tick・自然スポーン判定)。mod の乗り物の tick は約 10%、
+    mod のコードによるメモリ割り当ては全体の約 8%
+  - テスト用ワールドに、どの機能も使っていない強制ロードのチャンクが 47 個残っていた (サーバーを強制終了したときの残り)。
+    `/forceload query` で確認、`/tvm unloadchunks` で解除できる。解除後は待機時 1.7 ms/tick
+- テスト: `/tvmt subsetup` は水槽があれば作り直さない (作り直すと水の更新で負荷が出る)。乗っている間はサーバーの tick 時間を
+  100 tick ごとに記録 (`[tvmt] MSPT avg max`)。潜水艦の手順に、潜航中・浮上後の発射と降車 (降車前後の位置を記録) を追加。
+  専用サーバーで試すとき、テスト用プレイヤーはオペレーターにする (サーバーが遅れるとコマンドの連投判定でキックされるため)
 
 ## 1.21.11 版との差
 

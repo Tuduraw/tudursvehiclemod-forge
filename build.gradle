@@ -6,7 +6,9 @@ plugins {
     id 'org.spongepowered.mixin' version '0.7.38'
 }
 
-version = mod_version
+// The jar carries the loader and Minecraft version (tudursvehiclemod-1.1.1-forge-1.20.1.jar) so builds for several
+// environments can sit side by side; the mod's own version (mods.toml) stays mod_version.
+version = "${mod_version}-${mod_loader}-${minecraft_version}"
 group = mod_group_id
 
 base {

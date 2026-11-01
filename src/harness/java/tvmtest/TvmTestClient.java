@@ -173,6 +173,8 @@ final class TvmTestClient {
 	}
 
 	/** Submarine: surface run, dive, descend, turn, pitch, ascend; client vs server state every 20 ticks, screenshots in both views. */
+	static net.minecraft.world.entity.Entity lastVehicle;
+
 	static void subTick(Minecraft mc, String def, int t) {
 		// Timeline shared with the Fabric harness (vt/harness TvmTestClient.subTick).
 		if (System.getProperty("tvmt.trace") != null && mc.player.getVehicle() instanceof AbstractVehicleEntity v) {
@@ -204,6 +206,31 @@ final class TvmTestClient {
 		} else if (t == 540) {
 			hold(mc, "key.tudursvehiclemod.level_ascend", false);
 		}
+		// Fire while submerged (300-330) and after surfacing (545-560); dismount at 580 and watch the hull settle.
+		if (t == 300 || t == 545) {
+			hold(mc, "key.tudursvehiclemod.fire_weapon", true);
+		} else if (t == 330 || t == 560) {
+			hold(mc, "key.tudursvehiclemod.fire_weapon", false);
+		}
+		if (t == 298 || t == 332 || t == 543 || t == 562) {
+			clientState(mc, "fire" + t);
+			cmd(mc, "tvmt state");
+		}
+		if (t == 578) {
+			lastVehicle = mc.player.getVehicle();
+			mc.options.keyUp.setDown(false);
+		} else if (t == 580) {
+			mc.options.keyShift.setDown(true);
+		} else if (t == 584) {
+			mc.options.keyShift.setDown(false);
+		}
+		if (t >= 576 && t <= 640 && lastVehicle != null) {
+			TvmTest.LOG.info("[tvmt] DISMOUNT t={} riding={} hull=({}, {}, {}) yaw={}", t, mc.player.getVehicle() != null,
+					TvmTest.round(lastVehicle.getX()), TvmTest.round(lastVehicle.getY()), TvmTest.round(lastVehicle.getZ()), TvmTest.round(lastVehicle.getYRot()));
+		}
+		if (t == 600 || t == 640) {
+			cmd(mc, "tvmt dump d" + t);
+		}
 		if (t > 20 && t % 20 == 0 && t <= 560) {
 			clientState(mc, "s" + t);
 			cmd(mc, "tvmt state");
@@ -214,7 +241,7 @@ final class TvmTestClient {
 		} else if (t == 285 || t == 355 || t == 405) {
 			shot(mc, "sub" + t + "_tp");
 			mc.options.setCameraType(CameraType.FIRST_PERSON);
-		} else if (t == 580) {
+		} else if (t == 660) {
 			TvmTest.LOG.info("[tvmt] CLIENT DONE");
 			mc.stop();
 		}

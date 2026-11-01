@@ -48,8 +48,31 @@ public final class TvmTest {
 	public static final Logger LOG = LoggerFactory.getLogger("tvmtest");
 	static Entity last;
 
+	static long tickStart, tickSum, tickMax, tickCount;
+
 	public TvmTest() {
 		MinecraftForge.EVENT_BUS.addListener(this::commands);
+		// Server tick time while anyone rides a vehicle: "[tvmt] MSPT avg max" every 100 ticks (load investigation).
+		MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> {
+			if (e.phase == net.minecraftforge.event.TickEvent.Phase.START) {
+				tickStart = System.nanoTime();
+				return;
+			}
+			boolean riding = false;
+			for (ServerPlayer p : e.getServer().getPlayerList().getPlayers()) {
+				riding |= p.getVehicle() instanceof AbstractVehicleEntity;
+			}
+			if (!riding) {
+				return;
+			}
+			long ns = System.nanoTime() - tickStart;
+			tickSum += ns;
+			tickMax = Math.max(tickMax, ns);
+			if (++tickCount == 100) {
+				LOG.info("[tvmt] MSPT avg={} max={}", round(tickSum / 100 / 1.0e6), round(tickMax / 1.0e6));
+				tickSum = tickMax = tickCount = 0;
+			}
+		});
 		if (System.getProperty("tvmt.trace") != null) {
 			// per-tick server-side attitude of every player's vehicle (compare with the client's "TR CL" lines by game time)
 			MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> {
@@ -134,9 +157,17 @@ public final class TvmTest {
 					p.stopRiding();
 					var glass = net.minecraft.world.level.block.Blocks.GLASS.defaultBlockState();
 					var water = net.minecraft.world.level.block.Blocks.WATER.defaultBlockState();
-					for (int x = -30; x <= 70; x++) for (int z = -50; z <= 50; z++) for (int y = -61; y <= -26; y++) {
+					// The tank is kept between runs (building it is a load spike of its own); rebuilt only when missing.
+					boolean built = lv.getBlockState(new net.minecraft.core.BlockPos(-30, -40, 0)).is(net.minecraft.world.level.block.Blocks.GLASS)
+							&& lv.getBlockState(new net.minecraft.core.BlockPos(10, -40, 0)).is(net.minecraft.world.level.block.Blocks.WATER);
+					for (int x = -30; x <= 70 && !built; x++) for (int z = -50; z <= 50; z++) for (int y = -61; y <= -26; y++) {
 						boolean wall = x == -30 || x == 70 || z == -50 || z == 50 || y == -61;
 						lv.setBlock(new net.minecraft.core.BlockPos(x, y, z), wall ? glass : water, 2);
+					}
+					for (Entity old : lv.getEntitiesOfClass(AbstractVehicleEntity.class, new net.minecraft.world.phys.AABB(-40, -70, -60, 80, 0, 60))) {
+						if (old.getPassengers().isEmpty()) {
+							old.discard();
+						}
 					}
 					last = spawn(lv, new ResourceLocation(StringArgumentType.getString(c, "def")), new net.minecraft.world.phys.Vec3(10.5, -30, -40.5), 0f);
 					p.teleportTo(lv, 10.5, -29, -40.5, 0f, 0f);

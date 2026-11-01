@@ -9,7 +9,8 @@
     "BlockEntityLoadForgeMixin"
   ],
   "client": [
-    "client.LivingEntityRendererForgeMixin"
+    "client.LivingEntityRendererForgeMixin",
+    "client.MoveEntityCodecForgeMixin"
   ],
   "injectors": {
     "defaultRequire": 1
