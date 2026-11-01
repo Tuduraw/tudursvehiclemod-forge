@@ -1,0 +1,38 @@
+--- a/com/example/tudursvehiclemod/entity/ParachuteEntity.java
++++ b/com/example/tudursvehiclemod/entity/ParachuteEntity.java
+@@ -13,6 +13,12 @@
+  *
+  * <p>Deliberately does NOT reuse any of CarEntity/AircraftEntity's own much larger, vehicle-specific movement logic (throttle ramping, fuel, weapons-as-driving-input,..) - a parachute has exactly one job: descend slowly and predictably once airborne, with no pilot-driven propulsion of its own at all. See tudursvehiclemod$updateVehicleMovement() below for the actual physics. */
+ public class ParachuteEntity extends AbstractVehicleEntity {
++
++	/** Forge 1.20.1: the rider hangs below the canopy standing, not in the seated riding pose (1.21.11: BipedEntityModelMixin). */
++	@Override
++	public boolean shouldRiderSit() {
++		return false;
++	}
+ 
+ 	/** The terminal (maximum) downward speed this entity ever settles at, roughly matching what the previous Slow Falling-based mechanism produced. Blocks/tick. */
+ 	private static final double MAX_DESCENT_SPEED = 0.2;
+@@ -200,8 +206,7 @@
+ 	/** Shared by tudursvehiclemod$interact()'s own manual recovery and updateVehicleMovement()'s own automatic cleanup after VACANT_AUTO_ITEMIZE_TICKS - a fresh ParachuteItem stack carrying this entity's own current dye color. */
+ 	private net.minecraft.world.item.ItemStack tudursvehiclemod$createRecoveredItemStack() {
+ 		net.minecraft.world.item.ItemStack recovered = new net.minecraft.world.item.ItemStack(com.example.tudursvehiclemod.item.ModItems.PARACHUTE);
+-		recovered.set(net.minecraft.core.component.DataComponents.DYED_COLOR,
+-				new net.minecraft.world.item.component.DyedItemColor(this.tudursvehiclemod$getTintColor()));
++		recovered.getOrCreateTagElement("display").putInt("color", this.tudursvehiclemod$getTintColor() & 0xFFFFFF);
+ 		return recovered;
+ 	}
+ 
+@@ -209,10 +214,10 @@
+ 	public static void tudursvehiclemod$spawnAndMount(net.minecraft.world.entity.LivingEntity rider,
+ 			net.minecraft.server.level.ServerLevel world, Vec3 position, int colorArgb, boolean consumedRealItem) {
+ 		Entity spawned = com.example.tudursvehiclemod.registry.ModEntityTypes.PARACHUTE.create(world, null, entity -> {
+-			if (entity instanceof AbstractVehicleEntity vehicle) {
++			if (((Object) entity) instanceof AbstractVehicleEntity vehicle) {
+ 				vehicle.setVehicleDefinitionId(new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "parachute"));
+ 			}
+-			if (entity instanceof ParachuteEntity parachute) {
++			if (((Object) entity) instanceof ParachuteEntity parachute) {
+ 				parachute.tudursvehiclemod$setTintColor(colorArgb);
+ 				parachute.consumedRealItem = consumedRealItem;
+ 			}

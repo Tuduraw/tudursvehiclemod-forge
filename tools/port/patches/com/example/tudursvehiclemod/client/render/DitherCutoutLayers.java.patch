@@ -1,0 +1,92 @@
+--- a/com/example/tudursvehiclemod/client/render/DitherCutoutLayers.java
++++ b/com/example/tudursvehiclemod/client/render/DitherCutoutLayers.java
+@@ -1,14 +1,8 @@
+ package com.example.tudursvehiclemod.client.render;
+ 
+ import com.example.tudursvehiclemod.VehicleMod;
+-import com.example.tudursvehiclemod.client.mixin.RenderLayerFactoryInvoker;
+-import com.mojang.blaze3d.pipeline.RenderPipeline;
+-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+-import com.mojang.blaze3d.vertex.VertexFormat;
+ import net.minecraft.Util;
+-import net.minecraft.client.renderer.RenderPipelines;
+ import net.minecraft.client.renderer.RenderType;
+-import net.minecraft.client.renderer.rendertype.RenderSetup;
+ import net.minecraft.resources.ResourceLocation;
+ import java.util.function.Function;
+ 
+@@ -72,50 +66,14 @@
+ 			&& com.example.tudursvehiclemod.client.VehicleModClient.getConfig() != null
+ 			&& com.example.tudursvehiclemod.client.VehicleModClient.getConfig().experimentalTriangleRendering;
+ 
+-	/** Same ENTITY_SNIPPET-based configuration as vanilla's own cutout-style entity pipelines, but with the fragment shader swapped for this mod's own dithered-discard one - see this class's own doc for why. Registered with vanilla's own RenderPipelines.register() (not just built standalone) for the same reason vanilla itself always does this - shader-pack mods (Iris/OptiFine or similar) that recognize/remap pipelines by their own registered location need this to actually be visible to them.
+-	 *
+-	 * The vertex format and draw mode are deliberately INHERITED from ENTITY_SNIPPET untouched unless EXPERIMENTAL_TRIANGLES is on - see that field's own doc. Overriding them is what the experimental path does, and is the prime suspect for the reported SEUS PTGI breakage: a shader pack that recognises this pipeline by its registered location can bind its own replacement shader expecting vanilla's own entity vertex layout, so declaring a different one here leaves the two disagreeing about how to read each vertex. */
+-	private static final RenderPipeline PIPELINE = RenderPipelines.register(tudursvehiclemod$buildPipeline());
+-
+-	private static RenderPipeline tudursvehiclemod$buildPipeline() {
+-		RenderPipeline.Builder builder = RenderPipeline.builder(RenderPipelines.ENTITY_SNIPPET)
+-				.withLocation(new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "pipeline/entity_dither_cutout"))
+-				.withFragmentShader(new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "core/entity_dither_cutout"))
+-				.withShaderDefine("PER_FACE_LIGHTING")
+-				.withSampler("Sampler1")
+-				// Real culling enabled - see CURRENT_MODE_CULLS's own doc for the matching change to the beam/blade/band/dash decorative geometry this was originally disabled for, which now doubles its own geometry here too instead of relying on this pipeline drawing both faces for it.
+-				.withCull(true);
+-		if (EXPERIMENTAL_TRIANGLES) {
+-			builder = builder.withVertexFormat(DefaultVertexFormat.NEW_ENTITY,
+-					VertexFormat.Mode.TRIANGLES);
++	/** Forge 1.20.1: RenderTypes stand in for the 1.21 RenderPipeline/RenderSetup layers - baked dither (the default) uses
++	 * entityCutout (culling, like ENTITY_CUTOUT), "translucent" entityTranslucentCull, and "dither_shader" this mod's own
++	 * dither shader (forge.client.DitherRenderTypes, in TRIANGLES mode when EXPERIMENTAL_TRIANGLES is on). */
++	private static final Function<ResourceLocation, RenderType> ENTITY_DITHER_CUTOUT = Util.memoize(texture -> {
++		if (!USE_VANILLA_LAYER) {
++			return com.example.tudursvehiclemod.forge.client.DitherRenderTypes.entityDitherCutout(texture, EXPERIMENTAL_TRIANGLES);
+ 		}
+-		return builder.build();
+-	}
+-
+-	/** Same convention as vanilla's own RenderLayers factory fields - built once per distinct texture, reused afterwards, rather than reconstructing a whole RenderLayer (and its underlying RenderSetup) every single frame.
+-	 *
+-	 * Picks the pipeline for the configured mode - this mod's own dithered one, vanilla's translucent one for genuine alpha blending, or vanilla's cutout one when the dither pattern has instead been baked into the textures themselves. Everything else about the layer - texture binding, lightmap, overlay, outline mode - stays identical across all three, so the pipeline is the only thing that differs. */
+-	private static final Function<ResourceLocation, RenderType> ENTITY_DITHER_CUTOUT = Util.memoize(texture -> {
+-		RenderPipeline pipeline;
+-		String layerName;
+-		if (BAKE_DITHER_INTO_TEXTURES) {
+-			// Real culling enabled - ENTITY_CUTOUT (not the _NO_CULL variant) - see CURRENT_MODE_CULLS's own doc for the matching change to the beam/blade/band/dash decorative geometry.
+-			pipeline = RenderPipelines.ENTITY_CUTOUT;
+-			layerName = "tudursvehiclemod_entity_baked_dither_cutout";
+-		} else if (USE_VANILLA_LAYER) {
+-			pipeline = RenderPipelines.ENTITY_TRANSLUCENT;
+-			layerName = "tudursvehiclemod_entity_translucent";
+-		} else {
+-			pipeline = PIPELINE;
+-			layerName = "tudursvehiclemod_entity_dither_cutout";
+-		}
+-		RenderSetup renderSetup = RenderSetup.builder(pipeline)
+-				.withTexture("Sampler0", texture)
+-				.useLightmap()
+-				.useOverlay()
+-				.setOutline(RenderSetup.OutlineProperty.AFFECTS_OUTLINE)
+-				.createRenderSetup();
+-		return RenderLayerFactoryInvoker.tudursvehiclemod$of(layerName, renderSetup);
++		return tudursvehiclemod$mode().equals("translucent") ? RenderType.entityTranslucentCull(texture) : RenderType.entityCutout(texture);
+ 	});
+ 
+ 	/** This is the moment something first draws with a given texture, so it is where that texture is QUEUED for loading if it has not been already.
+@@ -129,15 +87,7 @@
+ 	/** Unlike the model and the beam, these draw thin, sparse overlays rather than large continuous surfaces, so the sorting risk against water and entities that motivated translucencyMode's own dither options in the first place was judged not to apply here. Fixed to translucent blending unconditionally - no mode branch at all.
+ 	 *
+ 	 * Deliberately a VANILLA pipeline. A custom fragment shader could mask the overlay by a block's own texture alpha, but doing so cost shader-pack compatibility outright - shader packs replace pipelines they recognise, and a mod-specific one is not among them - which was judged too high a price for a partial gain (it worked for leaves but not for plants, and washed lit blocks out into flat colour). */
+-	private static final Function<ResourceLocation, RenderType> ILLUMINATION_TRANSLUCENT = Util.memoize(texture -> {
+-		RenderSetup renderSetup = RenderSetup.builder(RenderPipelines.ENTITY_TRANSLUCENT)
+-				.withTexture("Sampler0", texture)
+-				.useLightmap()
+-				.useOverlay()
+-				.setOutline(RenderSetup.OutlineProperty.AFFECTS_OUTLINE)
+-				.createRenderSetup();
+-		return RenderLayerFactoryInvoker.tudursvehiclemod$of("tudursvehiclemod_illumination_translucent", renderSetup);
+-	});
++	private static final Function<ResourceLocation, RenderType> ILLUMINATION_TRANSLUCENT = Util.memoize((Function<ResourceLocation, RenderType>) RenderType::entityTranslucent);
+ 
+ 	/** The illumination system's own fixed-translucent layer. Same requestLoad() handling as entityDitherCutout() above, for the same reason. */
+ 	public static RenderType illuminationTranslucent(ResourceLocation texture) {

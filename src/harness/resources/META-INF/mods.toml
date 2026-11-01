@@ -1,0 +1,14 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+[[mods]]
+modId="tvmtest"
+version="0.1"
+displayName="TVM Forge test harness"
+description='''Test commands and a scripted client for tudursvehiclemod (Forge). Not for normal play.'''
+[[dependencies.tvmtest]]
+    modId="tudursvehiclemod"
+    mandatory=true
+    versionRange="*"
+    ordering="AFTER"
+    side="BOTH"

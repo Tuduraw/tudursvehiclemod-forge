@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/mixin/PassengerDamageFactorMixin.java
++++ b/com/example/tudursvehiclemod/mixin/PassengerDamageFactorMixin.java
+@@ -11,7 +11,7 @@
+ public abstract class PassengerDamageFactorMixin {
+ 
+ 	@ModifyVariable(
+-			method = "hurtServer(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/damagesource/DamageSource;F)Z",
++			method = "hurt(Lnet/minecraft/world/damagesource/DamageSource;F)Z",
+ 			at = @At("HEAD"), argsOnly = true)
+ 	private float tudursvehiclemod$applyPassengerDamageFactor(float amount) {
+ 		LivingEntity self = (LivingEntity) (Object) this;

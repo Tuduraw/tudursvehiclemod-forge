@@ -1,0 +1,20 @@
+--- a/com/example/tudursvehiclemod/entity/CarrierRunwayPlatformEntity.java
++++ b/com/example/tudursvehiclemod/entity/CarrierRunwayPlatformEntity.java
+@@ -114,7 +114,7 @@
+ 
+ 	/** This entity never equips/drops anything - explicitly empty (overrides the vanilla default, which would otherwise roll for random equipment drops on death, irrelevant here since this entity is invulnerable and never dies, but kept explicit for clarity). */
+ 	@Override
+-	protected void dropCustomDeathLoot(ServerLevel world, DamageSource source, boolean causedByPlayer) {
++	protected void dropCustomDeathLoot(DamageSource source, int looting, boolean causedByPlayer) {
+ 	}
+ 
+ 	/** Per a further direct report that this entity could still be attacked (with visible hit effects) despite setInvulnerable(true) already being set by the caller: isAttackable() and damage() are both overridden here to reject any attack/damage attempt outright, at the earliest point the game itself checks - rather than relying only on the generic invulnerable flag, which apparently doesn't suppress the attack ATTEMPT itself (and its own visual/audio hit feedback) even when it does suppress the resulting damage. */
+@@ -160,7 +160,6 @@
+ 				.add(Attributes.ATTACK_DAMAGE, 0.0)
+ 				.add(Attributes.ARMOR, 0.0)
+ 				.add(Attributes.ARMOR_TOUGHNESS, 0.0)
+-				.add(Attributes.KNOCKBACK_RESISTANCE, 1.0)
+-				.add(Attributes.SAFE_FALL_DISTANCE, 0.0);
++				.add(Attributes.KNOCKBACK_RESISTANCE, 1.0);
+ 	}
+ }

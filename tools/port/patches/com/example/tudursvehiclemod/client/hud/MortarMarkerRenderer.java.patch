@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/client/hud/MortarMarkerRenderer.java
++++ b/com/example/tudursvehiclemod/client/hud/MortarMarkerRenderer.java
+@@ -94,7 +94,7 @@
+ 			return;
+ 		}
+ 		Player player = client.player;
+-		if (!(com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player)
++		if (!(((Object) com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player))
+ 				instanceof AbstractVehicleEntity vehicle)) {
+ 			tudursvehiclemod$cachedImpactPos = null;
+ 			return;

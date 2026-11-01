@@ -1,0 +1,30 @@
+--- a/com/example/tudursvehiclemod/mixin/ProjectileFinalSegmentMixin.java
++++ b/com/example/tudursvehiclemod/mixin/ProjectileFinalSegmentMixin.java
+@@ -3,7 +3,6 @@
+ import com.example.tudursvehiclemod.entity.AbstractVehicleEntity;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.entity.projectile.Projectile;
+-import net.minecraft.world.entity.projectile.ProjectileDeflection;
+ import net.minecraft.world.phys.HitResult;
+ import net.minecraft.world.phys.Vec3;
+ import org.spongepowered.asm.mixin.Mixin;
+@@ -15,8 +14,8 @@
+ @Mixin(Projectile.class)
+ public abstract class ProjectileFinalSegmentMixin {
+ 
+-	@Inject(method = "hitTargetOrDeflectSelf", at = @At("HEAD"), cancellable = true)
+-	private void tudursvehiclemod$checkVehiclesOnFinalSegment(HitResult hitResult, CallbackInfoReturnable<ProjectileDeflection> cir) {
++	@Inject(method = "onHit(Lnet/minecraft/world/phys/HitResult;)V", at = @At("HEAD"), cancellable = true) // Forge 1.20.1: no hitTargetOrDeflectSelf; onHit is the same point
++	private void tudursvehiclemod$checkVehiclesOnFinalSegment(HitResult hitResult, org.spongepowered.asm.mixin.injection.callback.CallbackInfo cir) {
+ 		// An entity hit too: a shell that went through a hull and on into someone standing behind it, or a crew member inside it, struck the vehicle first.
+ 		if (hitResult.getType() == HitResult.Type.MISS) {
+ 			return;
+@@ -29,7 +28,7 @@
+ 		Vec3 from = AbstractVehicleEntity.tudursvehiclemod$lastMove(self)[0];
+ 		boolean vehicleHit = AbstractVehicleEntity.tudursvehiclemod$tryHitOnFinalSegment(world, self, from, hitResult.getLocation());
+ 		if (vehicleHit) {
+-			cir.setReturnValue(ProjectileDeflection.NONE);
++			cir.cancel();
+ 		}
+ 	}
+ }

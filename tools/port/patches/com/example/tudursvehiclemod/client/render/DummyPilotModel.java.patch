@@ -1,0 +1,56 @@
+--- a/com/example/tudursvehiclemod/client/render/DummyPilotModel.java
++++ b/com/example/tudursvehiclemod/client/render/DummyPilotModel.java
+@@ -8,25 +8,30 @@
+ import net.minecraft.client.model.geom.builders.LayerDefinition;
+ import net.minecraft.client.model.geom.builders.MeshDefinition;
+ import net.minecraft.client.model.geom.builders.PartDefinition;
+-import com.example.tudursvehiclemod.compat.mc.client.renderer.entity.state.LivingEntityRenderState;
++import com.example.tudursvehiclemod.entity.DummyPilotEntity;
++import com.mojang.blaze3d.vertex.PoseStack;
++import com.mojang.blaze3d.vertex.VertexConsumer;
++import net.minecraft.client.renderer.RenderType;
+ 
+ /** A completely standalone entity model, built entirely from its own ModelPartBuilder calls below - it shares no geometry, no ModelData, and no construction code with PlayerEntityModel or vanilla's own player rendering whatsoever, so nothing this class does can ever affect an actual player or interact with any other mod's own player-model changes.
+  *
+  * Proportions match Steve's own well-established body part dimensions exactly (so an ordinary player skin still maps onto it correctly), but the legs' own rest pose is built seated from the start (see SEATED_LEG_PITCH's own doc) - there is no "standing" variant of this model at all, matching a dummy pilot's own always-seated nature (see DummyPilotEntity's own tick(), which discards itself the instant it isn't riding a vehicle).
+  *
+  * Base body parts (head, body, arms, legs) each carry their own 1.8+ overlay layer (hat/jacket/sleeves/pants) as a direct child, supporting Minecraft 1.8+ player-skin layers - see getTexturedModelData()'s own doc for the exact UV/dilation values. Still no cape or ears at all - a dummy pilot is a fixed-shape passenger, not a full player-feature surface. */
+-public class DummyPilotModel extends EntityModel<LivingEntityRenderState> {
++public class DummyPilotModel extends EntityModel<DummyPilotEntity> {
+ 
+ 	/** Forward bend (radians) for each leg's own hip pivot, baked into its rest pose from construction - roughly 90 degrees, a normal seated angle. */
+ 	private static final float SEATED_LEG_PITCH = (float) (-Math.PI / 2.0);
+ 
++	private final ModelPart root;
+ 	private final ModelPart head;
+ 	private final ModelPart body;
+ 	private final ModelPart rightArm;
+ 	private final ModelPart leftArm;
+ 
+ 	public DummyPilotModel(ModelPart root) {
+-		super(root);
++		super(RenderType::entityCutoutNoCull);
++		this.root = root;
+ 		this.head = root.getChild("head");
+ 		this.body = root.getChild("body");
+ 		this.rightArm = root.getChild("right_arm");
+@@ -75,13 +80,13 @@
+ 
+ 	/** Only the head tracks the render state at all (a natural "looking around" cue) - arms/body/legs stay exactly at their own construction-time rest pose, since this pilot never walks, swings its arms, or otherwise animates beyond that. */
+ 	@Override
+-	public void setupAnim(LivingEntityRenderState state) {
+-		this.setAngles(state);
++	public void setupAnim(DummyPilotEntity entity, float limbSwing, float limbSwingAmount, float ageInTicks, float netHeadYaw, float headPitch) {
++		this.head.yRot = netHeadYaw * ((float) Math.PI / 180f);
++		this.head.xRot = headPitch * ((float) Math.PI / 180f);
+ 	}
+ 
+-	/** Keeps its Yarn name on purpose: addon mods built against the release (Yarn) jar call this typed method directly, e.g. super.setAngles(...) from their own renderer. In the release jar only the bridge method gets the intermediary name; this typed body stays "setAngles". The Mojang-named override above just forwards here. */
+-	public void setAngles(LivingEntityRenderState state) {
+-		this.head.yRot = state.yRot * ((float) Math.PI / 180f);
+-		this.head.xRot = state.xRot * ((float) Math.PI / 180f);
++	@Override
++	public void renderToBuffer(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, float red, float green, float blue, float alpha) {
++		this.root.render(poseStack, consumer, light, overlay, red, green, blue, alpha);
+ 	}
+ }

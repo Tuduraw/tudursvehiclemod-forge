@@ -1,0 +1,37 @@
+--- a/com/example/tudursvehiclemod/particle/WaterSplashEffect.java
++++ b/com/example/tudursvehiclemod/particle/WaterSplashEffect.java
+@@ -25,8 +25,32 @@
+ 			Codec.FLOAT.fieldOf("scale").forGetter(WaterSplashEffect::scale)
+ 	).apply(instance, WaterSplashEffect::new));
+ 
+-	public static final StreamCodec<RegistryFriendlyByteBuf, WaterSplashEffect> PACKET_CODEC =
+-			ByteBufCodecs.FLOAT.map(WaterSplashEffect::new, WaterSplashEffect::scale).cast();
++	/** Forge 1.20.1: particle types take a Codec and a ParticleOptions.Deserializer (no MapCodec/StreamCodec). */
++	public static final Codec<WaterSplashEffect> CODEC_1201 = CODEC.codec();
++
++	@SuppressWarnings("deprecation")
++	public static final ParticleOptions.Deserializer<WaterSplashEffect> DESERIALIZER = new ParticleOptions.Deserializer<>() {
++		@Override
++		public WaterSplashEffect fromCommand(ParticleType<WaterSplashEffect> type, com.mojang.brigadier.StringReader reader) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
++			reader.expect(' ');
++			return new WaterSplashEffect(reader.readFloat());
++		}
++
++		@Override
++		public WaterSplashEffect fromNetwork(ParticleType<WaterSplashEffect> type, net.minecraft.network.FriendlyByteBuf buf) {
++			return new WaterSplashEffect(buf.readFloat());
++		}
++	};
++
++	@Override
++	public void writeToNetwork(net.minecraft.network.FriendlyByteBuf buf) {
++		buf.writeFloat(this.scale());
++	}
++
++	@Override
++	public String writeToString() {
++		return net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE.getKey(this.getType()) + " " + this.scale();
++	}
+ 
+ 	@Override
+ 	public ParticleType<WaterSplashEffect> getType() {

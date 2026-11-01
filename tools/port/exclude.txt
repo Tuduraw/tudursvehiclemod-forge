@@ -1,0 +1,8 @@
+# Upstream files (paths relative to the source root) left out of the Forge build.
+# Mixins whose 1.21.11 target no longer exists in 1.20.1 (or is the 1.21.2+ render-state pipeline).
+# The others are migrated like any other source and adapted by patches; mixin configs live in src/forge/resources.
+com/example/tudursvehiclemod/mixin/ExplosionKnockbackMixin.java
+com/example/tudursvehiclemod/client/mixin/BipedEntityModelMixin.java
+com/example/tudursvehiclemod/client/mixin/LivingEntityRenderStateMixin.java
+com/example/tudursvehiclemod/client/mixin/LivingEntityRendererMixin.java
+com/example/tudursvehiclemod/client/mixin/RenderLayerFactoryInvoker.java

@@ -1,0 +1,20 @@
+--- a/com/example/tudursvehiclemod/network/FireSupportNetworking.java
++++ b/com/example/tudursvehiclemod/network/FireSupportNetworking.java
+@@ -24,7 +24,7 @@
+ 		ServerPlayNetworking.registerGlobalReceiver(FireSupportActionPayload.ID, (payload, context) -> context.server().execute(() -> {
+ 			ServerPlayer player = context.player();
+ 			if (!ModNetworking.tudursvehiclemod$canReachBlock(player, payload.pos())
+-					|| !(player.serverLevel() instanceof ServerLevel world)
++					|| !(((Object) player.serverLevel()) instanceof ServerLevel world)
+ 					|| !(world.getBlockEntity(payload.pos()) instanceof FireSupportCenterBlockEntity center)) {
+ 				return;
+ 			}
+@@ -45,7 +45,7 @@
+ 		}
+ 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+ 			if (player.containerMenu instanceof FireSupportScreenHandler handler && handler.tudursvehiclemod$getBlockPos() != null
+-					&& player.serverLevel() instanceof ServerLevel world
++					&& ((Object) player.serverLevel()) instanceof ServerLevel world
+ 					&& world.getBlockEntity(handler.tudursvehiclemod$getBlockPos()) instanceof FireSupportCenterBlockEntity center) {
+ 				tudursvehiclemod$sendState(player, world, center);
+ 			}

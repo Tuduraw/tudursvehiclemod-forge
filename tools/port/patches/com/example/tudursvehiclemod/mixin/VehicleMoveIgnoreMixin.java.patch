@@ -1,0 +1,12 @@
+--- a/com/example/tudursvehiclemod/mixin/VehicleMoveIgnoreMixin.java
++++ b/com/example/tudursvehiclemod/mixin/VehicleMoveIgnoreMixin.java
+@@ -168,8 +168,7 @@
+ 		if (vehicle instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity abstractVehicle
+ 				&& abstractVehicle.tudursvehiclemod$isCarriedByRunwayLastTick()) {
+ 			ci.cancel();
+-			this.player.connection.send(new net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket(
+-					vehicle.position(), vehicle.getYRot(), vehicle.getXRot()));
++			this.player.connection.send(new net.minecraft.network.protocol.game.ClientboundMoveVehiclePacket(vehicle));
+ 		}
+ 	}
+ }

@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/VehicleMod.java
++++ b/com/example/tudursvehiclemod/VehicleMod.java
+@@ -220,7 +220,7 @@
+ 					return true;
+ 				});
+ 			} else if (blockEntity instanceof com.example.tudursvehiclemod.block.FireSupportCenterBlockEntity fireSupportCenter
+-					&& world instanceof net.minecraft.server.level.ServerLevel fireSupportWorld) {
++					&& ((Object) world) instanceof net.minecraft.server.level.ServerLevel fireSupportWorld) {
+ 				// Its own chunk while remote control is on - the same re-request after a reload as the Station and the Drone Center below.
+ 				ServerTickTasks.schedule(server -> {
+ 					if (!fireSupportCenter.isRemoved()) {

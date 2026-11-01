@@ -1,0 +1,20 @@
+--- a/com/example/tudursvehiclemod/block/FireSupportCenterBlockEntity.java
++++ b/com/example/tudursvehiclemod/block/FireSupportCenterBlockEntity.java
+@@ -733,7 +733,7 @@
+ 		if (stick.isEmpty()) {
+ 			return "-";
+ 		}
+-		if (stick.has(net.minecraft.core.component.DataComponents.CUSTOM_NAME)) {
++		if (stick.hasCustomHoverName()) {
+ 			return stick.getHoverName().getString();
+ 		}
+ 		AbstractVehicleEntity vehicle = world == null ? null : this.tudursvehiclemod$findUnitVehicle(world, unit);
+@@ -932,7 +932,7 @@
+ 	private void tudursvehiclemod$onSlotChanged(int slot, ItemStack previous) {
+ 		if (slot < UNIT_SLOTS && this.getLevel() instanceof ServerLevel world) {
+ 			if (previous.getItem() instanceof DroneControlStickItem
+-					&& DroneCenterBlockEntity.tudursvehiclemod$findBoundVehicle(world, DroneControlStickItem.getRegisteredVehicleId(previous))
++					&& ((Object) DroneCenterBlockEntity.tudursvehiclemod$findBoundVehicle(world, DroneControlStickItem.getRegisteredVehicleId(previous)))
+ 					instanceof AbstractVehicleEntity oldVehicle) {
+ 				this.tudursvehiclemod$releaseGunners(oldVehicle, java.util.Set.of());
+ 			}

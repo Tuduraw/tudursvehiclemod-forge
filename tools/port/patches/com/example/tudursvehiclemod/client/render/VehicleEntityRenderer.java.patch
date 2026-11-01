@@ -1,0 +1,92 @@
+--- a/com/example/tudursvehiclemod/client/render/VehicleEntityRenderer.java
++++ b/com/example/tudursvehiclemod/client/render/VehicleEntityRenderer.java
+@@ -1425,32 +1425,16 @@
+ 		// Leaving transparent parts (a plant's cross-shaped texture, glass, etc) untouched ("あくまでブロックの不透過テクスチャ部分のみを対象とし、透過部分に対しては影響を与えないようにすることは可能ですか"): earlier this wrapper discarded the block model's own UV entirely and substituted a fixed one, which meant the fragment shader's own texture(Sampler0, texCoord0) sampled the SAME single texel for every vertex regardless of where on the block's own texture that vertex actually was - there was no way for a transparent part of the texture to ever be sampled, so nothing could suppress the overlay there. Passing the model's own REAL UV through instead lets that same shader-level sampling do the actual work: a transparent texel's own near-zero alpha multiplies through exactly the way its colour does, suppressing the overlay there natively - no separate transparency check has to be written, because the vanilla-standard "colour = texture * vertexColor" multiply this pipeline already does is precisely that check.
+ 		//
+ 		// Buffers each element as it's set rather than emitting immediately on vertex(x,y,z): a VertexConsumer's own contract is that position often arrives first with the rest following before the implicit "next vertex" boundary, so submitting on vertex() (as this used to) meant every OTHER call - color, texture, overlay, light, normal - arrived too late to matter and was silently discarded. Buffering until whichever call happens to arrive last for this vertex, then flushing once all pending fields have real values, uses the model's own real texture coordinates instead of ignoring them.
++		// Forge 1.20.1: a vertex is complete at endVertex(), so position and UV are buffered until then.
+ 		return new com.mojang.blaze3d.vertex.VertexConsumer() {
+ 			private float pendingX, pendingY, pendingZ;
+ 			private float pendingU, pendingV;
+-			private boolean havePosition;
+-			private boolean haveTexture;
+-
+-			private void flushIfReady() {
+-				if (havePosition && haveTexture) {
+-					delegate.vertex(pose, pendingX, pendingY, pendingZ)
+-							.color(r, g, b, a)
+-							.uv(pendingU, pendingV)
+-							.overlayCoords(OverlayTexture.NO_OVERLAY)
+-							.uv2(SEARCH_LIGHT_BEAM_FULL_BRIGHT)
+-							.normal(matrixEntry.normal(), 0f, 1f, 0f).endVertex();
+-					havePosition = false;
+-					haveTexture = false;
+-				}
+-			}
+ 
+ 			@Override
+-			public com.mojang.blaze3d.vertex.VertexConsumer vertex(float x, float y, float z) {
+-				pendingX = x;
+-				pendingY = y;
+-				pendingZ = z;
+-				havePosition = true;
+-				flushIfReady();
++			public com.mojang.blaze3d.vertex.VertexConsumer vertex(double x, double y, double z) {
++				pendingX = (float) x;
++				pendingY = (float) y;
++				pendingZ = (float) z;
+ 				return this;
+ 			}
+ 
+@@ -1458,24 +1442,17 @@
+ 			public com.mojang.blaze3d.vertex.VertexConsumer uv(float u, float v) {
+ 				pendingU = u;
+ 				pendingV = v;
+-				haveTexture = true;
+-				flushIfReady();
+ 				return this;
+ 			}
+ 
+-			// Colour, overlay, light and normal are still fully overridden above (full bright, the light's own tint) - only the texture COORDINATE is taken from the model, not its lighting or vertex colour.
++			// Colour, overlay, light and normal are still fully overridden (full bright, the light's own tint) - only the texture COORDINATE is taken from the model.
+ 			@Override
+ 			public com.mojang.blaze3d.vertex.VertexConsumer color(int red, int green, int blue, int alpha) {
+ 				return this;
+ 			}
+ 
+ 			@Override
+-			public com.mojang.blaze3d.vertex.VertexConsumer color(int argb) {
+-				return this;
+-			}
+-
+-			@Override
+-			public com.mojang.blaze3d.vertex.VertexConsumer setUv1(int u, int v) {
++			public com.mojang.blaze3d.vertex.VertexConsumer overlayCoords(int u, int v) {
+ 				return this;
+ 			}
+ 
+@@ -1490,9 +1467,21 @@
+ 			}
+ 
+ 			@Override
+-			public com.mojang.blaze3d.vertex.VertexConsumer setLineWidth(float width) {
+-				delegate.setLineWidth(width);
+-				return this;
++			public void endVertex() {
++				delegate.vertex(pose, pendingX, pendingY, pendingZ)
++						.color(r, g, b, a)
++						.uv(pendingU, pendingV)
++						.overlayCoords(OverlayTexture.NO_OVERLAY)
++						.uv2(SEARCH_LIGHT_BEAM_FULL_BRIGHT)
++						.normal(matrixEntry.normal(), 0f, 1f, 0f).endVertex();
++			}
++
++			@Override
++			public void defaultColor(int red, int green, int blue, int alpha) {
++			}
++
++			@Override
++			public void unsetDefaultColor() {
+ 			}
+ 		};
+ 	}

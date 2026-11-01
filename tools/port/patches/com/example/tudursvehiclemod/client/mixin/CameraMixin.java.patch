@@ -1,0 +1,94 @@
+--- a/com/example/tudursvehiclemod/client/mixin/CameraMixin.java
++++ b/com/example/tudursvehiclemod/client/mixin/CameraMixin.java
+@@ -27,9 +27,27 @@
+ 	@Invoker("setPosition")
+ 	public abstract void tudursvehiclemod$setPos(Vec3 pos);
+ 
+-	@Inject(method = "setup(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;ZZF)V", at = @At("TAIL"))
+-	private void tudursvehiclemod$applyVehicleRollAndPos(Level area, Entity focusedEntity, boolean thirdPerson,
++	/** Forge 1.20.1: the view is built from yaw/pitch (+ the roll of ViewportEvent.ComputeCameraAngles), so orientation goes through these instead of Camera.rotation(). */
++	@org.spongepowered.asm.mixin.Shadow
++	protected abstract void setRotation(float yaw, float pitch);
++
++	/** Same orientation as 1.21.11's rotateY(180 - yaw) * rotateX(-pitch) * rotateZ(-roll) (* rotateY(PI) for the inverse view). */
++	private void tudursvehiclemod$setAngles(float yaw, float pitch, float roll, boolean inverseView) {
++		if (inverseView) {
++			this.setRotation(yaw + 180.0f, -pitch);
++			com.example.tudursvehiclemod.forge.client.CameraRoll.set(-roll);
++		} else {
++			this.setRotation(yaw, pitch);
++			com.example.tudursvehiclemod.forge.client.CameraRoll.set(roll);
++		}
++	}
++
++	@Inject(method = "setup(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/world/entity/Entity;ZZF)V", at = @At("TAIL"))
++	private void tudursvehiclemod$applyVehicleRollAndPos(net.minecraft.world.level.BlockGetter blockGetter, Entity focusedEntity, boolean thirdPerson,
+ 													boolean inverseView, float tickProgress, CallbackInfo ci) {
++		if (!(blockGetter instanceof Level area)) {
++			return;
++		}
+ 		if (!(focusedEntity instanceof Player player)) {
+ 			return;
+ 		}
+@@ -58,13 +76,7 @@
+ 			if (missile instanceof com.example.tudursvehiclemod.entity.projectile.VehicleProjectileEntity) {
+ 				float missileYaw = missile.getViewYRot(tickProgress);
+ 				float missilePitch = missile.getViewXRot(tickProgress);
+-				Quaternionf fresh = new Quaternionf();
+-				fresh.rotateY((float) Math.toRadians(180.0 - missileYaw));
+-				fresh.rotateX((float) Math.toRadians(-missilePitch));
+-				if (inverseView) {
+-					fresh.rotateY((float) Math.PI);
+-				}
+-				self.rotation().set(fresh);
++				this.tudursvehiclemod$setAngles(missileYaw, missilePitch, 0f, inverseView);
+ 				this.tudursvehiclemod$setPos(missile.getPosition(tickProgress));
+ 				return;
+ 			}
+@@ -108,7 +120,7 @@
+ 				// looking (same as it does outside free-look).
+ 				float rollDegrees = aircraft.getRoll(tickProgress);
+ 				if (rollDegrees != 0f) {
+-					self.rotation().rotateZ((float) -Math.toRadians(rollDegrees));
++					com.example.tudursvehiclemod.forge.client.CameraRoll.set(inverseView ? -rollDegrees : rollDegrees);
+ 				}
+ 				if (thirdPerson) {
+ 					this.tudursvehiclemod$setPos(tudursvehiclemod$pullBackAlongCurrentRotation(
+@@ -123,15 +135,8 @@
+ 			float pitch = aircraft.getViewXRot(tickProgress);
+ 			float roll = aircraft.getRoll(tickProgress);
+ 
+-			Quaternionf fresh = new Quaternionf();
+-			fresh.rotateY((float) Math.toRadians(180.0 - yaw));
+-			fresh.rotateX((float) Math.toRadians(-pitch));
+-			fresh.rotateZ((float) Math.toRadians(-roll));
+-			if (inverseView) {
+-				// Minecraft's own second third-person stage (F5 twice): camera in front, facing back towards the player.
+-				fresh.rotateY((float) Math.PI);
+-			}
+-			self.rotation().set(fresh);
++			// Inverse view = Minecraft's own second third-person stage (F5 twice): camera in front, facing back towards the player.
++			this.tudursvehiclemod$setAngles(yaw, pitch, roll, inverseView);
+ 
+ 			// Applied in BOTH first and third person for aircraft (unlike the other vehicles below, which only get it in first person).
+ 			if (thirdPerson) {
+@@ -151,7 +156,7 @@
+ 
+ 		float rollDegrees = vehicle.getRoll(tickProgress);
+ 		if (rollDegrees != 0f) {
+-			self.rotation().rotateZ((float) -Math.toRadians(rollDegrees));
++			com.example.tudursvehiclemod.forge.client.CameraRoll.set(inverseView ? -rollDegrees : rollDegrees);
+ 		}
+ 
+ 		// Third person was left on vanilla's own
+@@ -201,8 +206,8 @@
+ 	/** Free-look's own third-person pull-back: since the rotation is left as whatever vanilla's own camera update already set it to.. */
+ 	private static Vec3 tudursvehiclemod$pullBackAlongCurrentRotation(Camera self, Level area, Player player,
+ 																   Vec3 eyePos) {
+-		Vector3f pullDirection = new Vector3f(0, 0, 1);
+-		self.rotation().transform(pullDirection);
++		// Forge 1.20.1: Camera.rotation() maps +Z to the look direction (1.21.11 maps -Z), so pull back against getLookVector() instead.
++		Vector3f pullDirection = new Vector3f(self.getLookVector()).negate();
+ 		return tudursvehiclemod$pullBack(area, player, eyePos, pullDirection);
+ 	}
+ 

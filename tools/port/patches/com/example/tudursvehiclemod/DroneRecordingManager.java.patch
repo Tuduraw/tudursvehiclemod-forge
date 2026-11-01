@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/DroneRecordingManager.java
++++ b/com/example/tudursvehiclemod/DroneRecordingManager.java
+@@ -62,7 +62,7 @@
+ 				player.displayClientMessage(Component.translatable("message.tudursvehiclemod.drone_recording.stopped"), false);
+ 				continue;
+ 			}
+-			if (!(AbstractVehicleEntity.tudursvehiclemod$getEffectiveVehicle(player) instanceof AbstractVehicleEntity vehicle)) {
++			if (!(((Object) AbstractVehicleEntity.tudursvehiclemod$getEffectiveVehicle(player)) instanceof AbstractVehicleEntity vehicle)) {
+ 				iterator.remove();
+ 				player.displayClientMessage(Component.translatable("message.tudursvehiclemod.drone_recording.stopped"), false);
+ 				continue;

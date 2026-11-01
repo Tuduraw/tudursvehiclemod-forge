@@ -1,0 +1,18 @@
+--- a/com/example/tudursvehiclemod/registry/ModParticleTypes.java
++++ b/com/example/tudursvehiclemod/registry/ModParticleTypes.java
+@@ -37,13 +37,13 @@
+ 		EXPLOSION_FLASH = com.example.tudursvehiclemod.compat.Registration.register(BuiltInRegistries.PARTICLE_TYPE,
+ 				new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "explosion_flash"),
+ 				com.example.tudursvehiclemod.compat.fabric.fabric.api.particle.v1.FabricParticleTypes.complex(
+-						true, ExplosionFlashEffect.CODEC, ExplosionFlashEffect.PACKET_CODEC));
++						true, ExplosionFlashEffect.DESERIALIZER, ExplosionFlashEffect.CODEC_1201));
+ 		SMOKE_PUFF = com.example.tudursvehiclemod.compat.Registration.register(BuiltInRegistries.PARTICLE_TYPE,
+ 				new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "smoke_puff"),
+ 				com.example.tudursvehiclemod.compat.fabric.fabric.api.particle.v1.FabricParticleTypes.simple(true));
+ 		WATER_SPLASH = com.example.tudursvehiclemod.compat.Registration.register(BuiltInRegistries.PARTICLE_TYPE,
+ 				new net.minecraft.resources.ResourceLocation(VehicleMod.MOD_ID, "water_splash"),
+ 				com.example.tudursvehiclemod.compat.fabric.fabric.api.particle.v1.FabricParticleTypes.complex(
+-						true, WaterSplashEffect.CODEC, WaterSplashEffect.PACKET_CODEC));
++						true, WaterSplashEffect.DESERIALIZER, WaterSplashEffect.CODEC_1201));
+ 	}
+ }

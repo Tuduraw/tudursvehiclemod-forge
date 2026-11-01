@@ -1,0 +1,29 @@
+--- a/com/example/tudursvehiclemod/client/mixin/PlayerLookRateMixin.java
++++ b/com/example/tudursvehiclemod/client/mixin/PlayerLookRateMixin.java
+@@ -31,7 +31,7 @@
+ 		if (!(self instanceof Player player)) {
+ 			return cursorDeltaY;
+ 		}
+-		if (!(com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player) instanceof AbstractVehicleEntity vehicle)) {
++		if (!(((Object) com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player)) instanceof AbstractVehicleEntity vehicle)) {
+ 			return cursorDeltaY;
+ 		}
+ 		int selectedWeaponIndex = com.example.tudursvehiclemod.client.VehicleModClient.getSelectedWeaponIndex();
+@@ -75,7 +75,7 @@
+ 		this.tudursvehiclemod$pitchBefore = self.getXRot();
+ 
+ 		if (self instanceof Player player) {
+-			if (com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player) instanceof AbstractVehicleEntity vehicle) {
++			if (((Object) com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player)) instanceof AbstractVehicleEntity vehicle) {
+ 				if (AbstractVehicleEntity.tudursvehiclemod$usesAircraftStyleOrientation(vehicle)
+ 						&& !vehicle.tudursvehiclemod$isEffectiveFreeLook(player)) {
+ 					AircraftOrientationInputState.accumulatedYawDelta += (float) (cursorDeltaX * DEGREES_PER_RAW_UNIT);
+@@ -91,7 +91,7 @@
+ 		if (!(self instanceof Player player)) {
+ 			return;
+ 		}
+-		if (!(com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player) instanceof AbstractVehicleEntity vehicle) || vehicle.tudursvehiclemod$isEffectiveFreeLook(player)) {
++		if (!(((Object) com.example.tudursvehiclemod.client.VehicleModClient.tudursvehiclemod$getClientEffectiveVehicle(player)) instanceof AbstractVehicleEntity vehicle) || vehicle.tudursvehiclemod$isEffectiveFreeLook(player)) {
+ 			return;
+ 		}
+ 		if (AbstractVehicleEntity.tudursvehiclemod$usesAircraftStyleOrientation(vehicle)

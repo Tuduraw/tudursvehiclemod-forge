@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "W": {
+      "item": "minecraft:brown_wool"
+    },
+    "T": {
+      "item": "minecraft:string"
+    },
+    "L": {
+      "item": "minecraft:leather_chestplate"
+    }
+  },
+  "pattern": [
+    "WWW",
+    "T T",
+    " L "
+  ],
+  "result": {
+    "count": 1,
+    "item": "tudursvehiclemod:parachute",
+    "nbt": {
+      "display": {
+        "color": 8606770
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+--- a/com/example/tudursvehiclemod/block/StationBlockEntity.java
++++ b/com/example/tudursvehiclemod/block/StationBlockEntity.java
+@@ -130,7 +130,7 @@
+ 		UUID playerId = this.pendingControlPlayerId;
+ 		this.pendingControlPlayerId = null;
+ 		this.pendingControlTicksWaited = 0;
+-		if (world.getServer().getPlayerList().getPlayer(playerId) instanceof ServerPlayer player) {
++		if (((Object) world.getServer().getPlayerList().getPlayer(playerId)) instanceof ServerPlayer player) {
+ 			notify.accept(player);
+ 		}
+ 	}
+@@ -177,7 +177,7 @@
+ 	public void preRemoveSideEffects(BlockPos pos, net.minecraft.world.level.block.state.BlockState oldState) {
+ 		if (this.getLevel() instanceof ServerLevel serverWorld) {
+ 			this.tudursvehiclemod$releasePendingControlChunk(serverWorld);
+-			if (tudursvehiclemod$findBoundVehicle(serverWorld, this.tudursvehiclemod$getBoundVehicleId())
++			if (((Object) tudursvehiclemod$findBoundVehicle(serverWorld, this.tudursvehiclemod$getBoundVehicleId()))
+ 					instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 				vehicle.tudursvehiclemod$tryExitRemoteControl();
+ 			}

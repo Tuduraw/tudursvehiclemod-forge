@@ -1,0 +1,16 @@
+--- a/com/example/tudursvehiclemod/entity/projectile/VehicleProjectileEntity.java
++++ b/com/example/tudursvehiclemod/entity/projectile/VehicleProjectileEntity.java
+@@ -786,7 +786,12 @@
+ 	}
+ 
+ 	@Override
+-	protected double getGravity() {
++	protected float getGravity() {
++		return (float) this.tvm$getGravity();
++	}
++
++	/** 1.21 returns gravity as a double; 1.20.1's ThrowableProjectile asks for a float (above). */
++	protected double tvm$getGravity() {
+ 		// Guided missiles are self-propelled and fly under their own guidance, not ballistic trajectories. A torpedo stops falling the instant it touches water (see tudursvehiclemod$updateUnderwaterCruise()'s own doc) - checked via isTouchingWater() (a plain world-state query, correct on BOTH client and server with no networking needed) rather than the CRUISING-phase fields below, which are only ever meaningful on the server - see UNDERWATER_CRUISE_CAPABLE's own doc for why that distinction actually matters here.
+ 		// TVMissile control felt badly unstable
+ 		// (visible wobble, occasional violent snap-rotation): this used

@@ -1,0 +1,74 @@
+--- a/com/example/tudursvehiclemod/client/VehicleModClient.java
++++ b/com/example/tudursvehiclemod/client/VehicleModClient.java
+@@ -159,7 +159,7 @@
+ 	public static java.util.List<Integer> tudursvehiclemod$ownSeatWeaponIndices(
+ 			net.minecraft.world.entity.player.Player player) {
+ 		java.util.List<Integer> result = new java.util.ArrayList<>();
+-		if (!(tudursvehiclemod$getClientEffectiveVehicle(player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle)) {
++		if (!(((Object) tudursvehiclemod$getClientEffectiveVehicle(player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle)) {
+ 			return result;
+ 		}
+ 		int seatIndex = vehicle.tudursvehiclemod$getAssignedSeatIndex(player);
+@@ -704,7 +704,7 @@
+ 			// server round-trip at all.
+ 			if (cameraSwitchKey.consumeClick()) {
+ 				if (client.player != null
+-						&& tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
++						&& ((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 					int seatIndex = vehicle.tudursvehiclemod$getAssignedSeatIndex(client.player);
+ 					vehicle.tudursvehiclemod$cycleCameraPosition(seatIndex);
+ 				}
+@@ -718,7 +718,7 @@
+ 
+ 			if (gearToggleKey.consumeClick()) {
+ 				if (client.player != null
+-						&& tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
++						&& ((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 					// CRITICAL: also toggle directly on the client's own local copy, not just send it to the server.
+ 					vehicle.toggleLandingGear();
+ 					ClientPlayNetworking.send(new GearTogglePayload());
+@@ -757,7 +757,7 @@
+ 				if (manualModeHeldTicks == MANUAL_MODE_HOLD_TICKS && !manualModeToggledThisHold) {
+ 					manualModeToggledThisHold = true;
+ 					if (client.player != null
+-							&& tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity manualVehicle) {
++							&& ((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity manualVehicle) {
+ 						boolean newManualMode = !manualVehicle.isManualMode();
+ 						manualVehicle.setManualMode(newManualMode);
+ 						ClientPlayNetworking.send(new ManualModePayload(newManualMode));
+@@ -789,7 +789,7 @@
+ 				if (currentFreeLook != lastFreeLookState) {
+ 					lastFreeLookState = currentFreeLook;
+ 					if (tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.FreeCameraVehicle
+-							&& tudursvehiclemod$getClientEffectiveVehicle(client.player)
++							&& ((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player))
+ 									instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 						// Resets the player's own yaw/pitch to match the vehicle's current facing, both when
+ 						// free-look STARTS (so it begins from the current facing rather than resuming wherever
+@@ -822,7 +822,7 @@
+ 				// server-side network handler), so diving/ascending applied
+ 				// correctly on the server but never visually moved the
+ 				// entity on screen.
+-				if (tudursvehiclemod$getClientEffectiveVehicle(client.player)
++				if (((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player))
+ 						instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity levelVehicle) {
+ 					levelVehicle.setSyncedLevelAscendInput(currentLevelAscend);
+ 					levelVehicle.setSyncedLevelDescendInput(currentLevelDescend);
+@@ -858,7 +858,7 @@
+ 					currentThrottleInput = client.player.zza;
+ 					currentSidewaysInput = client.player.xxa;
+ 				}
+-				if (tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity throttleVehicle) {
++				if (((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity throttleVehicle) {
+ 					throttleVehicle.setSyncedThrottleInput(currentThrottleInput);
+ 					throttleVehicle.setSyncedSidewaysInput(currentSidewaysInput);
+ 				}
+@@ -873,7 +873,7 @@
+ 				// vehicle here otherwise (unlike helicopters, which use a
+ 				// dedicated descend key instead - see README's own doc).
+ 				boolean currentBrake = client.options.keyJump.isDown();
+-				if (tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity brakeVehicle) {
++				if (((Object) tudursvehiclemod$getClientEffectiveVehicle(client.player)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity brakeVehicle) {
+ 					brakeVehicle.setSyncedBrakeInput(currentBrake);
+ 				}
+ 				if (currentBrake != lastBrakeState) {

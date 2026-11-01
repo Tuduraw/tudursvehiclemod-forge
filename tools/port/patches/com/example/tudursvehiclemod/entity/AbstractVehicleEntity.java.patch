@@ -1,0 +1,127 @@
+--- a/com/example/tudursvehiclemod/entity/AbstractVehicleEntity.java
++++ b/com/example/tudursvehiclemod/entity/AbstractVehicleEntity.java
+@@ -1795,7 +1795,7 @@
+ 
+ 	/** Ends player's remote control if they have one (their body goes back to the station, as ending control normally does). For a logout or server stop, before the player is saved - see mixin.RemoteControlLogoutMixin. */
+ 	public static void tudursvehiclemod$endRemoteControlOf(net.minecraft.server.level.ServerPlayer player) {
+-		if (tudursvehiclemod$getEffectiveVehicle(player) instanceof AbstractVehicleEntity vehicle
++		if (((Object) tudursvehiclemod$getEffectiveVehicle(player)) instanceof AbstractVehicleEntity vehicle
+ 				&& player.getUUID().equals(vehicle.remoteControllerId)) {
+ 			vehicle.tudursvehiclemod$tryExitRemoteControl();
+ 		}
+@@ -1829,7 +1829,7 @@
+ 		this.entityData.set(REMOTE_CONTROLLER_UUID, player.getUUID().toString());
+ 		if (this.level() instanceof net.minecraft.server.level.ServerLevel serverWorld) {
+ 			player.teleportTo(serverWorld, this.getX(), this.getY(), this.getZ(),
+-					java.util.Set.of(), this.getYRot(), this.getXRot(), false);
++					java.util.Set.of(), this.getYRot(), this.getXRot());
+ 		}
+ 		// This vehicle's own remote controller must
+ 		// ALWAYS end up in the pilot seat (seat 0) specifically -
+@@ -1854,7 +1854,7 @@
+ 			return;
+ 		}
+ 		if (this.level() instanceof net.minecraft.server.level.ServerLevel serverWorld
+-				&& serverWorld.getServer().getPlayerList().getPlayer(this.remoteControllerId) instanceof net.minecraft.server.level.ServerPlayer player
++				&& ((Object) serverWorld.getServer().getPlayerList().getPlayer(this.remoteControllerId)) instanceof net.minecraft.server.level.ServerPlayer player
+ 				&& player.getVehicle() == this) {
+ 			player.stopRiding();
+ 		} else {
+@@ -1883,29 +1883,23 @@
+ 	/** See ExternalMotionController. Null (the default) = the vehicle's own physics. */
+ 	private ExternalMotionController externalMotionController;
+ 	/** Handed to vanilla while an external controller is installed on the client, so the server's position packets are stored there and never applied: the client computes the same pose itself, and snapping to the (one network delay older) server position every few ticks would make the motion jerk. */
+-	private net.minecraft.world.entity.InterpolationHandler externalMotionPacketSink;
+ 
+ 	/** Installs (or with null removes) the external movement controller - see ExternalMotionController. */
+ 	public void tudursvehiclemod$setExternalMotionController(ExternalMotionController controller) {
+ 		this.externalMotionController = controller;
+-		if (controller == null) {
+-			this.externalMotionPacketSink = null;
+-		}
+ 	}
+ 
+ 	public ExternalMotionController tudursvehiclemod$getExternalMotionController() {
+ 		return this.externalMotionController;
+ 	}
+ 
++	/** Forge 1.20.1: 1.21 swaps in a packet sink InterpolationHandler; here the server's position updates are simply not applied while an external controller drives the client. */
+ 	@Override
+-	public net.minecraft.world.entity.InterpolationHandler getInterpolation() {
++	public void lerpTo(double x, double y, double z, float yRot, float xRot, int steps, boolean teleport) {
+ 		if (this.externalMotionController != null && this.level().isClientSide()) {
+-			if (this.externalMotionPacketSink == null) {
+-				this.externalMotionPacketSink = new net.minecraft.world.entity.InterpolationHandler(this);
+-			}
+-			return this.externalMotionPacketSink;
+-		}
+-		return super.getInterpolation();
++			return;
++		}
++		super.lerpTo(x, y, z, yRot, xRot, steps, teleport);
+ 	}
+ 
+ 	/** Places this vehicle exactly at pos with the given body attitude (the same Ry(-yaw)*Rx(pitch)*Rz(roll) convention as tudursvehiclemod$getBodyOrientation()), for an ExternalMotionController. Moves without collision; the velocity is set to the distance moved so anything reading it (sounds, effects, a rider's view) sees the real speed. Yaw and roll are kept continuous with their previous values (no jump from 180 to -180), so render interpolation stays smooth. AircraftEntity overrides this to set its attitude quaternion directly. */
+@@ -3314,7 +3308,7 @@
+ 		// to treat them as seat 0's own occupant, matching "operates
+ 		// exactly like actually being aboard and piloting it".
+ 		if (seatIndex == 0 && this.remoteControllerId != null
+-				&& this.level().getPlayerByUUID(this.remoteControllerId) instanceof Entity remoteController) {
++				&& ((Object) this.level().getPlayerByUUID(this.remoteControllerId)) instanceof Entity remoteController) {
+ 			return remoteController;
+ 		}
+ 		return null;
+@@ -5031,7 +5025,7 @@
+ 				candidates.add(candidate);
+ 			}
+ 		}
+-		net.minecraft.core.Direction fallDirection = candidates.get(this.getRandom().nextInt(candidates.size()));
++		net.minecraft.core.Direction fallDirection = candidates.get(this.random.nextInt(candidates.size()));
+ 		int fallStepX = fallDirection.getStepX();
+ 		int fallStepZ = fallDirection.getStepZ();
+ 		net.minecraft.world.level.block.state.properties.Property<net.minecraft.core.Direction.Axis> axisProperty =
+@@ -7148,7 +7142,7 @@
+ 						// No longer requires a passenger at all - an UNMANNED, glide-released Carrier aircraft (see AircraftEntity's own tudursvehiclemod$updateCarrierReturnToBase() doc: it turns off drone control after its own last landing waypoint and relies on THIS exact mechanism for its own recovery) would otherwise never actually be recovered here, since it has no passenger by definition.
+ 						// Per a bug this review surfaced: without the previous passenger requirement, a freshly-launched (unmanned) aircraft - still near AddWeapon and likely still slow in its own first few ticks after spawning - could satisfy both the radius and speed conditions immediately, getting swept right back into ammo before it ever actually got a chance to fly its own route at all. Excludes any candidate still within its own spawn-grace window (the same one already used elsewhere to stabilize a freshly-spawned aircraft).
+ 						// Each zone's own Box already scopes this search to a cube around that zone's own center/radius (unchanged from the original AddWeapon-only behavior, not a true sphere check - see this method's own doc) - no further per-zone distance check needed here beyond the Box itself.
+-						e -> e instanceof AircraftEntity aircraftCandidate && aircraftCandidate.tickCount >= AircraftEntity.SPAWN_GRACE_TICKS
++						e -> ((Object) e) instanceof AircraftEntity aircraftCandidate && aircraftCandidate.tickCount >= AircraftEntity.SPAWN_GRACE_TICKS
+ 								&& aircraftCandidate.getDefinition().equals(maybeAircraftDef.get())
+ 								&& aircraftCandidate.getDeltaMovement().lengthSqr() < CARRIER_ESSENTIALLY_LANDED_SPEED_SQ)) {
+ 					recoveredAircraft = (AircraftEntity) nearby;
+@@ -7219,7 +7213,7 @@
+ 	/** An AircraftEntity they're actively piloting under Carrier control switches them back to their own recorded mothership seat (see AircraftEntity's own carrierMothershipUuid/carrierMothershipSeatIndex doc); any other seat with a linked aircraft (see carrierLinkedAircraftBySeat's own doc) switches them INTO that aircraft's own pilot seat instead. Silently does nothing (no error, no message) if the target vehicle/seat is no longer valid (aircraft already gone, mothership already gone, target seat already occupied by someone else) - same "unconfigured/unavailable falls back to inert" convention as this project's other opportunistic, not-strictly-validated actions. */
+ 	public static void tudursvehiclemod$toggleCarrierSeat(ServerPlayer player) {
+ 		AbstractVehicleEntity currentVehicle = tudursvehiclemod$getEffectiveVehicle(player);
+-		if (currentVehicle == null || !(player.serverLevel() instanceof ServerLevel serverWorld)) {
++		if (currentVehicle == null || !(((Object) player.serverLevel()) instanceof ServerLevel serverWorld)) {
+ 			return;
+ 		}
+ 		if (currentVehicle.tudursvehiclemod$isLaunchedCraftPlayerControlled()) {
+@@ -8819,7 +8813,8 @@
+ 		for (Entity passenger : this.tudursvehiclemod$getRealPassengerList()) {
+ 			passenger.setYRot(passenger.getYRot() - yawDelta);
+ 			if (passenger != controller && passenger instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+-				serverPlayer.connection.send(new net.minecraft.network.protocol.game.ClientboundPlayerRotationPacket(-yawDelta, true, 0f, true));
++				// Forge 1.20.1 has no relative-rotation packet: a fully relative teleport with only the yaw changed.
++				com.example.tudursvehiclemod.compat.Compat.turnView(serverPlayer, -yawDelta);
+ 			}
+ 		}
+ 	}
+@@ -8830,7 +8825,6 @@
+ 	}
+ 
+ 	/** Places each passenger at the seat with the same index as their mount order. */
+-	@Override
+ 	protected Vec3 getPassengerAttachmentPoint(Entity passenger, EntityDimensions dimensions, float scaleFactor) {
+ 		VehicleDefinition def = getDefinition();
+ 		int index = this.tudursvehiclemod$getAssignedSeatIndex(passenger);
+@@ -8838,7 +8832,7 @@
+ 			SeatDefinition seat = def.seats().get(index);
+ 			return new Vec3(seat.offsetX(), seat.offsetY(), seat.offsetZ()).scale(def.scale());
+ 		}
+-		return super.getPassengerAttachmentPoint(passenger, dimensions, scaleFactor);
++		return new Vec3(0.0, this.getPassengersRidingOffset(), 0.0);
+ 	}
+ 
+ 	/** The rotation used to orient a passenger's seat offset, current (non- interpolated) tick values. */

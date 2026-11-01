@@ -1,0 +1,14 @@
+--- a/com/example/tudursvehiclemod/entity/FireSupportGunnerEntity.java
++++ b/com/example/tudursvehiclemod/entity/FireSupportGunnerEntity.java
+@@ -136,6 +136,11 @@
+ 	}
+ 
+ 	@Override
++	public Iterable<net.minecraft.world.item.ItemStack> getArmorSlots() {
++		return java.util.Collections.emptyList();
++	}
++
++	@Override
+ 	public HumanoidArm getMainArm() {
+ 		return HumanoidArm.RIGHT;
+ 	}

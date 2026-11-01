@@ -1,0 +1,17 @@
+--- a/com/example/tudursvehiclemod/client/screen/DummyPilotConfigScreen.java
++++ b/com/example/tudursvehiclemod/client/screen/DummyPilotConfigScreen.java
+@@ -135,11 +135,11 @@
+ 	public void render(GuiGraphics context, int mouseX, int mouseY, float delta) {
+ 		super.render(context, mouseX, mouseY, delta);
+ 		ResourceLocation texture = DummyPilotSkins.tudursvehiclemod$getTexture(this.skinId);
+-		// 10-arg overload: (x, y, u, v, drawW, drawH, regionW, regionH, texW, texH) - the one that magnifies an 8x8 source region up to PREVIEW_SIZE. The 9-arg form used elsewhere in this project draws 1:1 and can't.
++		// Forge 1.20.1 11-arg overload: (texture, x, y, drawW, drawH, u, v, regionW, regionH, texW, texH) - the one that magnifies an 8x8 source region up to PREVIEW_SIZE. The 9-arg form used elsewhere in this project draws 1:1 and can't.
+ 		context.blit(texture,
+-				this.previewX, this.previewY, 8.0f, 8.0f, PREVIEW_SIZE, PREVIEW_SIZE, 8, 8, 64, 64);
++				this.previewX, this.previewY, PREVIEW_SIZE, PREVIEW_SIZE, 8.0f, 8.0f, 8, 8, 64, 64);
+ 		context.blit(texture,
+-				this.previewX, this.previewY, 40.0f, 8.0f, PREVIEW_SIZE, PREVIEW_SIZE, 8, 8, 64, 64);
++				this.previewX, this.previewY, PREVIEW_SIZE, PREVIEW_SIZE, 40.0f, 8.0f, 8, 8, 64, 64);
+ 	}
+ 
+ 	private void tudursvehiclemod$cycleSkin(int direction) {

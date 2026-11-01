@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/block/StationBlock.java
++++ b/com/example/tudursvehiclemod/block/StationBlock.java
+@@ -98,7 +98,7 @@
+ 		}
+ 
+ 		// Per this class's own doc: the SAME button toggles both directions - exiting if this exact player is ALREADY remote-controlling the bound vehicle through this exact station right now.
+-		if (StationBlockEntity.tudursvehiclemod$findBoundVehicle(serverWorld, boundVehicleId)
++		if (((Object) StationBlockEntity.tudursvehiclemod$findBoundVehicle(serverWorld, boundVehicleId))
+ 				instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity alreadyControlledVehicle
+ 				&& alreadyControlledVehicle.tudursvehiclemod$getRemoteControllerId() != null
+ 				&& alreadyControlledVehicle.tudursvehiclemod$getRemoteControllerId().equals(serverPlayer.getUUID())) {

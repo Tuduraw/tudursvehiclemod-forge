@@ -1,0 +1,11 @@
+--- a/com/example/tudursvehiclemod/block/FuelRefinerBlock.java
++++ b/com/example/tudursvehiclemod/block/FuelRefinerBlock.java
+@@ -63,7 +63,7 @@
+ 	}
+ 
+ 	@Override
+-	public int getAnalogOutputSignal(BlockState state, Level world, BlockPos pos, net.minecraft.core.Direction direction) {
++	public int getAnalogOutputSignal(BlockState state, Level world, BlockPos pos) {
+ 		if (world.getBlockEntity(pos) instanceof FuelRefinerBlockEntity blockEntity) {
+ 			return Math.round(blockEntity.getStoredBurnTimeRatio() * 15f);
+ 		}

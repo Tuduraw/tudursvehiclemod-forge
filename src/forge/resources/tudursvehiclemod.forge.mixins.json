@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.example.tudursvehiclemod.forge.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "tudursvehiclemod.refmap.json",
+  "mixins": [
+    "ExplosionKnockbackForgeMixin",
+    "BlockEntityLoadForgeMixin"
+  ],
+  "client": [
+    "client.LivingEntityRendererForgeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

@@ -1,0 +1,37 @@
+--- a/com/example/tudursvehiclemod/particle/ExplosionFlashEffect.java
++++ b/com/example/tudursvehiclemod/particle/ExplosionFlashEffect.java
+@@ -27,8 +27,32 @@
+ 			Codec.FLOAT.fieldOf("peak_scale").forGetter(ExplosionFlashEffect::peakScale)
+ 	).apply(instance, ExplosionFlashEffect::new));
+ 
+-	public static final StreamCodec<RegistryFriendlyByteBuf, ExplosionFlashEffect> PACKET_CODEC =
+-			ByteBufCodecs.FLOAT.map(ExplosionFlashEffect::new, ExplosionFlashEffect::peakScale).cast();
++	/** Forge 1.20.1: particle types take a Codec and a ParticleOptions.Deserializer (no MapCodec/StreamCodec). */
++	public static final Codec<ExplosionFlashEffect> CODEC_1201 = CODEC.codec();
++
++	@SuppressWarnings("deprecation")
++	public static final ParticleOptions.Deserializer<ExplosionFlashEffect> DESERIALIZER = new ParticleOptions.Deserializer<>() {
++		@Override
++		public ExplosionFlashEffect fromCommand(ParticleType<ExplosionFlashEffect> type, com.mojang.brigadier.StringReader reader) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
++			reader.expect(' ');
++			return new ExplosionFlashEffect(reader.readFloat());
++		}
++
++		@Override
++		public ExplosionFlashEffect fromNetwork(ParticleType<ExplosionFlashEffect> type, net.minecraft.network.FriendlyByteBuf buf) {
++			return new ExplosionFlashEffect(buf.readFloat());
++		}
++	};
++
++	@Override
++	public void writeToNetwork(net.minecraft.network.FriendlyByteBuf buf) {
++		buf.writeFloat(this.peakScale());
++	}
++
++	@Override
++	public String writeToString() {
++		return net.minecraft.core.registries.BuiltInRegistries.PARTICLE_TYPE.getKey(this.getType()) + " " + this.peakScale();
++	}
+ 
+ 	@Override
+ 	public ParticleType<ExplosionFlashEffect> getType() {

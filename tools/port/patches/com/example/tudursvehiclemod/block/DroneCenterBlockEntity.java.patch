@@ -1,0 +1,47 @@
+--- a/com/example/tudursvehiclemod/block/DroneCenterBlockEntity.java
++++ b/com/example/tudursvehiclemod/block/DroneCenterBlockEntity.java
+@@ -491,7 +491,7 @@
+ 		this.orbitAltitude = orbitAltitude;
+ 		this.radiusMultiplier = radiusMultiplier;
+ 		this.setChanged();
+-		if (this.active && tudursvehiclemod$findBoundVehicle(world, this.tudursvehiclemod$getBoundVehicleId())
++		if (this.active && ((Object) tudursvehiclemod$findBoundVehicle(world, this.tudursvehiclemod$getBoundVehicleId()))
+ 				instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 			vehicle.tudursvehiclemod$setDroneLink(this.getBlockPos(), speedFraction, orbitAltitude, radiusMultiplier);
+ 		}
+@@ -644,7 +644,7 @@
+ 		if (previousBoundId == null || previousBoundId.equals(newBoundId) || !(this.getLevel() instanceof ServerLevel serverWorld)) {
+ 			return;
+ 		}
+-		if (tudursvehiclemod$findBoundVehicle(serverWorld, previousBoundId) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity previousVehicle) {
++		if (((Object) tudursvehiclemod$findBoundVehicle(serverWorld, previousBoundId)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity previousVehicle) {
+ 			previousVehicle.tudursvehiclemod$setDroneLink(null);
+ 		}
+ 		this.tudursvehiclemod$releaseFormationWingmen(serverWorld);
+@@ -1043,7 +1043,7 @@
+ 			this.tudursvehiclemod$onBoundStickChanged(previousBoundId);
+ 			UUID newBoundId = this.tudursvehiclemod$getBoundVehicleId();
+ 			if (newBoundId != null && !newBoundId.equals(previousBoundId) && this.getLevel() instanceof ServerLevel serverWorld
+-					&& tudursvehiclemod$findBoundVehicle(serverWorld, newBoundId) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
++					&& ((Object) tudursvehiclemod$findBoundVehicle(serverWorld, newBoundId)) instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
+ 				this.homePoint = new DroneWaypoint(
+ 						(int) Math.floor(vehicle.getX()) - this.getBlockPos().getX(),
+ 						(int) Math.floor(vehicle.getY()) - this.getBlockPos().getY(),
+@@ -1154,7 +1154,7 @@
+ 		this.formationSpacing = view.getDoubleOr("FormationSpacing", 8.0);
+ 		this.formationElementSpacing = view.getDoubleOr("FormationElementSpacing", -1.0);
+ 		this.formationSlots = NonNullList.withSize(Math.max(0, this.formationSize - 1), ItemStack.EMPTY);
+-		view.child("FormationSlots").ifPresent(slotsView -> ContainerHelper.loadAllItems(slotsView, this.formationSlots));
++		view.child("FormationSlots").ifPresent(slotsView -> ContainerHelper.loadAllItems(slotsView.tag(), this.formationSlots));
+ 	}
+ 
+ 	@Override
+@@ -1214,7 +1214,7 @@
+ 		view.putDouble("FormationSpacing", this.formationSpacing);
+ 		view.putDouble("FormationElementSpacing", this.formationElementSpacing);
+ 		if (!this.formationSlots.isEmpty()) {
+-			ContainerHelper.saveAllItems(view.child("FormationSlots"), this.formationSlots, true);
++			ContainerHelper.saveAllItems(view.child("FormationSlots").tag(), this.formationSlots, true);
+ 		}
+ 	}
+ }

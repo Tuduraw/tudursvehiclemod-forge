@@ -1,0 +1,14 @@
+--- a/com/example/tudursvehiclemod/client/mixin/WorldRendererLightmapMixin.java
++++ b/com/example/tudursvehiclemod/client/mixin/WorldRendererLightmapMixin.java
+@@ -32,9 +32,9 @@
+ 	/** The 2-argument overload above is a convenience wrapper, and is NOT what the chunk/block renderer itself calls - block model rendering goes through this 4-argument form (the one taking a BrightnessGetter, which lives in net.minecraft.client.render.block). Injecting only into the short form therefore lit entities (which reach the lighting engine by their own separate path) while leaving terrain completely untouched, which is exactly the reported behaviour.
+ 	 *
+ 	 * Both overloads now funnel into the same tudursvehiclemod$applySearchLight(), so whichever one a given piece of geometry happens to use, it gets the identical treatment. */
+-	@Inject(method = "getLightColor(Lnet/minecraft/client/renderer/LevelRenderer$BrightnessGetter;Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;)I",
++	@Inject(method = "getLightColor(Lnet/minecraft/world/level/BlockAndTintGetter;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/core/BlockPos;)I",
+ 			at = @At("TAIL"), cancellable = true)
+-	private static void tudursvehiclemod$brightenInsideSearchLightWithState(LevelRenderer.BrightnessGetter brightnessGetter, BlockAndTintGetter world,
++	private static void tudursvehiclemod$brightenInsideSearchLightWithState(BlockAndTintGetter world,
+ 			BlockState state, BlockPos pos, CallbackInfoReturnable<Integer> cir) {
+ 		tudursvehiclemod$applySearchLight(pos, cir);
+ 	}
