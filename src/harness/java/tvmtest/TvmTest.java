@@ -7,6 +7,7 @@ import com.example.tudursvehiclemod.entity.AbstractVehicleEntity;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -49,9 +50,33 @@ public final class TvmTest {
 	static Entity last;
 
 	static long tickStart, tickSum, tickMax, tickCount;
+	static final java.util.Map<AbstractVehicleEntity, int[]> wrecks = new java.util.LinkedHashMap<>();
 
 	public TvmTest() {
 		MinecraftForge.EVENT_BUS.addListener(this::commands);
+		MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> {
+			if (e.phase != net.minecraftforge.event.TickEvent.Phase.END || wrecks.isEmpty()) {
+				return;
+			}
+			for (var it = wrecks.entrySet().iterator(); it.hasNext(); ) {
+				var en = it.next();
+				AbstractVehicleEntity w = en.getKey();
+				int[] st = en.getValue();
+				if (st[0] == st[1] && w.level() instanceof ServerLevel wl) {
+					try {
+						java.lang.reflect.Method destroy = AbstractVehicleEntity.class.getDeclaredMethod("tudursvehiclemod$onDestroyed", ServerLevel.class);
+						destroy.setAccessible(true);
+						destroy.invoke(w, wl);
+					} catch (ReflectiveOperationException ex) {
+						throw new RuntimeException(ex);
+					}
+				}
+				LOG.info("[tvmt] WR x={} {} y={} vy={} destroyed={} sinking={}", round(w.getX()), st[0], round(w.getY()), round(w.getDeltaMovement().y), w.tudursvehiclemod$isDestroyed(), w.tudursvehiclemod$isSinking());
+				if (++st[0] > st[1] + 150) {
+					it.remove();
+				}
+			}
+		});
 		// Server tick time while anyone rides a vehicle: "[tvmt] MSPT avg max" every 100 ticks (load investigation).
 		MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.TickEvent.ServerTickEvent e) -> {
 			if (e.phase == net.minecraftforge.event.TickEvent.Phase.START) {
@@ -148,6 +173,30 @@ public final class TvmTest {
 					p.fallDistance = 0;
 					p.teleportTo(c.getSource().getLevel(), 10.5, -60, 1.5, 0f, 0f);
 					return reply(c, "home");
+				})))
+				.then(Commands.literal("wreck").then(Commands.argument("x", DoubleArgumentType.doubleArg()).then(Commands.argument("h", DoubleArgumentType.doubleArg())
+						.then(Commands.argument("delay", IntegerArgumentType.integer(0)).then(Commands.argument("def", StringArgumentType.greedyString()).executes(safe(c -> {
+					// Destroyed-vehicle test: spawn at x, <h> blocks above the tank's water surface (y -26 block, see subsetup), destroy it
+					// after <delay> ticks, then log "[tvmt] WR <x> <tick> y vy sinking" for 200 ticks.
+					ServerLevel lv = c.getSource().getLevel();
+					double x = DoubleArgumentType.getDouble(c, "x");
+					double h = DoubleArgumentType.getDouble(c, "h");
+					AbstractVehicleEntity v = (AbstractVehicleEntity) spawn(lv, new ResourceLocation(StringArgumentType.getString(c, "def")), new net.minecraft.world.phys.Vec3(x, -26 + h, 0.5), 0f);
+					wrecks.put(v, new int[] {0, IntegerArgumentType.getInteger(c, "delay")});
+					LOG.info("[tvmt] WRECK x={} {} h={}", x, StringArgumentType.getString(c, "def"), h);
+					return reply(c, "wreck");
+				})))))))
+				.then(Commands.literal("clearvehicles").executes(safe(c -> {
+					// Removes every unridden vehicle in and around the test tank (left over from earlier runs).
+					int n = 0;
+					for (AbstractVehicleEntity old : c.getSource().getLevel().getEntitiesOfClass(AbstractVehicleEntity.class, new net.minecraft.world.phys.AABB(-60, -70, -80, 120, 40, 80))) {
+						if (old.getPassengers().isEmpty()) {
+							old.discard();
+							n++;
+						}
+					}
+					LOG.info("[tvmt] CLEAR {}", n);
+					return reply(c, "cleared " + n);
 				})))
 				.then(Commands.literal("subsetup").then(Commands.argument("def", StringArgumentType.greedyString()).executes(safe(c -> {
 					// Submarine test (same as the Fabric harness's /tvmtest subsetup): glass tank x -30..70, z -50..50, floor y -61,

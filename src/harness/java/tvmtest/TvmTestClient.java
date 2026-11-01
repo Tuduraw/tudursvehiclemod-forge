@@ -66,6 +66,38 @@ final class TvmTestClient {
 		KeyMapping fire = key(mc, "key.tudursvehiclemod.fire_weapon");
 		// The first ~5 s after joining are mostly the terrain loading screen.
 		int t = ticks - 100;
+		if (def != null && def.startsWith("wreck:")) {
+			// wreck:<height>:<vehicle id> - see TvmTest's /tvmt wreck
+			// client-side view of every vehicle in the tank: "[tvmt] WC <x> <t> y sinking" (compare with the server's WR lines)
+			for (net.minecraft.world.entity.Entity ce : mc.level.entitiesForRendering()) {
+				if (ce instanceof AbstractVehicleEntity cv && t >= 20 && t <= 260) {
+					TvmTest.LOG.info("[tvmt] WC x={} {} y={} sinking={}", TvmTest.round(cv.getX()), t, TvmTest.round(cv.getY()), cv.tudursvehiclemod$isSinking());
+				}
+			}
+			// wreck test: six vehicle types dropped 10 blocks above the water and destroyed (the ship floating first);
+			// "wreck:intact" drops the same six without destroying them, for comparison
+			String delayOverride = def.endsWith("intact") ? " 1000 " : null;
+			if (t == 10) {
+				cmd(mc, "tvmt clearvehicles");
+			}
+			if (t == 20 && delayOverride != null) {
+				for (String cm : new String[] {"-20.5 10 X ww2fict:a_fighter", "-5.5 10 X tudur_sample:sample_helicopter", "10.5 10 X tudur_sample:sample_vtol",
+						"25.5 10 X tudur_sample:sample_halftrack", "40.5 10 X ww2fict:a_floatfighter", "55.5 0 X tudur_sample:sample_ship"}) {
+					cmd(mc, "tvmt wreck " + cm.replace(" X ", delayOverride));
+				}
+			} else if (t == 20) {
+				cmd(mc, "tvmt wreck -20.5 10 0 ww2fict:a_fighter");
+				cmd(mc, "tvmt wreck -5.5 10 0 tudur_sample:sample_helicopter");
+				cmd(mc, "tvmt wreck 10.5 10 0 tudur_sample:sample_vtol");
+				cmd(mc, "tvmt wreck 25.5 10 0 tudur_sample:sample_halftrack");
+				cmd(mc, "tvmt wreck 40.5 10 0 ww2fict:a_floatfighter");
+				cmd(mc, "tvmt wreck 55.5 0 80 tudur_sample:sample_ship");
+			} else if (t == 300) {
+				TvmTest.LOG.info("[tvmt] CLIENT DONE");
+				mc.stop();
+			}
+			return;
+		}
 		if (def != null && def.contains("submarine")) {
 			subTick(mc, def, t);
 			return;
