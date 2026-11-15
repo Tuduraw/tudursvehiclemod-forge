@@ -1,6 +1,6 @@
 --- a/com/example/tudursvehiclemod/entity/projectile/VehicleProjectileEntity.java
 +++ b/com/example/tudursvehiclemod/entity/projectile/VehicleProjectileEntity.java
-@@ -786,7 +786,12 @@
+@@ -794,7 +794,12 @@
  	}
  
  	@Override

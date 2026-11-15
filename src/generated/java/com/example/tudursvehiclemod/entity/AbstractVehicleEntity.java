@@ -507,11 +507,25 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 
 	/** See ThrottleInputPayload's own doc for why this exists instead of just reading PlayerEntity#forwardSpeed directly. A ground-route-following vehicle previously moved smoothly only for a riding-but-not-driving passenger's own client - see tudursvehiclemod$applyGroundWaypointAutopilotInputs()'s own doc for the full mechanism: while this vehicle's own GROUND_ROUTE_ACTIVE flag (synced) is true, returns the synced GROUND_AUTOPILOT_THROTTLE_INPUT instead of this plain field - every client now reads the SAME, correct, autopilot-driven value this way, rather than each client's own copy of this plain field (which, for an autopilot-driven vehicle, no packet from any actual controlling player ever populates at all). Falls back to this plain field otherwise, unchanged - an actual player-piloted vehicle's own input responsiveness is completely unaffected, since GROUND_ROUTE_ACTIVE is never true for one. */
 	public float getSyncedThrottleInput() {
+		ExternalMotionController controller = this.externalMotionController;
+		if (controller != null) {
+			Float external = controller.tudursvehiclemod$throttle(this);
+			if (external != null) {
+				return external;
+			}
+		}
 		return this.entityData.get(GROUND_ROUTE_ACTIVE) ? this.entityData.get(GROUND_AUTOPILOT_THROTTLE_INPUT) : this.syncedThrottleInput;
 	}
 
 	/** See getSyncedThrottleInput()'s own doc - same reasoning, same mechanism, for steering instead of throttle. */
 	public float getSyncedSidewaysInput() {
+		ExternalMotionController controller = this.externalMotionController;
+		if (controller != null) {
+			Float external = controller.tudursvehiclemod$steering(this);
+			if (external != null) {
+				return external;
+			}
+		}
 		return this.entityData.get(GROUND_ROUTE_ACTIVE) ? this.entityData.get(GROUND_AUTOPILOT_STEER_INPUT) : this.syncedSidewaysInput;
 	}
 
@@ -547,6 +561,13 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	}
 
 	public float getThrottle() {
+		ExternalMotionController controller = this.externalMotionController;
+		if (controller != null) {
+			Float external = controller.tudursvehiclemod$throttle(this);
+			if (external != null) {
+				return external;
+			}
+		}
 		return this.entityData.get(THROTTLE);
 	}
 
@@ -1038,8 +1059,20 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	/** "/tvm clean -d" resets ALL persisted vehicle data by spawning a fresh replacement entity (see command.TvmCommand's own doc) - needed to tell that fresh entity which vehicle definition it should represent, since only setVehicleDefinitionId() existed before this. Null if VEHICLE_ID's own raw string is somehow malformed (should never actually happen for a live, functioning vehicle). */
 	public ResourceLocation getVehicleDefinitionId() {
 		String raw = this.entityData.get(VEHICLE_ID);
-		return ResourceLocation.tryParse(raw);
+		ParsedDefinitionId parsed = this.tudursvehiclemod$parsedDefinitionId;
+		// The same String object until the synced value is set again, so the parse (addons look their own settings up by this id, many times a tick) is done once per value.
+		if (parsed == null || parsed.raw() != raw) {
+			parsed = new ParsedDefinitionId(raw, ResourceLocation.tryParse(raw));
+			this.tudursvehiclemod$parsedDefinitionId = parsed;
+		}
+		return parsed.id();
 	}
+
+	/** VEHICLE_ID's value with the Identifier parsed from it - see getVehicleDefinitionId(). */
+	private record ParsedDefinitionId(String raw, ResourceLocation id) {
+	}
+
+	private ParsedDefinitionId tudursvehiclemod$parsedDefinitionId;
 
 	/** Current health, out of getMaxHealth(). */
 	public float getHealth() {
@@ -1317,16 +1350,27 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		if (encoded.isEmpty()) {
 			return java.util.Set.of();
 		}
-		java.util.Set<Integer> ids = new java.util.HashSet<>();
-		for (String part : encoded.split(",")) {
-			try {
-				ids.add(Integer.parseInt(part));
-			} catch (NumberFormatException ignored) {
-				// Defensive - shouldn't happen given this is entirely this mod's own encoding, but a malformed value here shouldn't crash rendering.
+		// Parsed once per synced value (read for every vehicle, every frame) - the same String object until it is set again. The set is read-only.
+		DecodedHighlightedIds decoded = this.tudursvehiclemod$decodedHighlightedIds;
+		if (decoded == null || decoded.encoded() != encoded) {
+			java.util.Set<Integer> ids = new java.util.HashSet<>();
+			for (String part : encoded.split(",")) {
+				try {
+					ids.add(Integer.parseInt(part));
+				} catch (NumberFormatException ignored) {
+					// Defensive - shouldn't happen given this is entirely this mod's own encoding, but a malformed value here shouldn't crash rendering.
+				}
 			}
+			decoded = new DecodedHighlightedIds(encoded, java.util.Collections.unmodifiableSet(ids));
+			this.tudursvehiclemod$decodedHighlightedIds = decoded;
 		}
-		return ids;
+		return decoded.ids();
 	}
+
+	private record DecodedHighlightedIds(String encoded, java.util.Set<Integer> ids) {
+	}
+
+	private DecodedHighlightedIds tudursvehiclemod$decodedHighlightedIds;
 
 	/** Attempts to lock whatever is currently under shooter's own crosshair, assigning it to a wingman to attack - see AircraftEntity's own override for the real logic (which needs that class's own formation registries). No-op base-class default for any non-aircraft vehicle, where this feature doesn't apply at all. */
 	public void tudursvehiclemod$tryLockCarrierTarget(net.minecraft.server.level.ServerPlayer shooter) {
@@ -1918,6 +1962,31 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	public interface ExternalMotionController {
 		/** Called once per tick, in place of updateVehicleMovement(), at the point where the vehicle's own movement normally runs. Typically calls vehicle.tudursvehiclemod$applyExternalPose(). Return false to let the vehicle's own physics run for this tick instead (for example once the controller has finished). */
 		boolean tudursvehiclemod$tickMotion(AbstractVehicleEntity vehicle);
+
+		/** The throttle the vehicle reports while this controller is installed - getThrottle(), getSyncedThrottleInput() and (for vehicle types that don't compute their own) the speed of its spinning parts - or null (the default) to leave it as it is. For a controller that moves the vehicle itself but still wants the engine sound, rotors, exhaust and HUD to show a power setting. */
+		default Float tudursvehiclemod$throttle(AbstractVehicleEntity vehicle) {
+			return null;
+		}
+
+		/** The steering input (getSyncedSidewaysInput()) the vehicle reports while this controller is installed, or null (the default) to leave it as it is. */
+		default Float tudursvehiclemod$steering(AbstractVehicleEntity vehicle) {
+			return null;
+		}
+
+		/** Where the occupant of seatIndex is taken to be looking, for the weapon parts that follow that seat (getWeaponAimYaw()/getWeaponAimPitch()): {yaw relative to the vehicle, pitch}, in degrees. Null (the default) = the occupant's own view. Only asked while that seat has an occupant. */
+		default float[] tudursvehiclemod$aim(AbstractVehicleEntity vehicle, int seatIndex, float tickProgress) {
+			return null;
+		}
+	}
+
+	/** ExternalMotionController#tudursvehiclemod$aim() for occupant's seat, or null if there is no controller or it leaves that seat alone. */
+	private float[] tudursvehiclemod$externalAim(Entity occupant, float tickProgress) {
+		ExternalMotionController controller = this.externalMotionController;
+		if (controller == null || occupant == null || occupant == this) {
+			return null;
+		}
+		int seatIndex = this.tudursvehiclemod$getAssignedSeatIndex(occupant);
+		return seatIndex < 0 ? null : controller.tudursvehiclemod$aim(this, seatIndex, tickProgress);
 	}
 
 	/** See ExternalMotionController. Null (the default) = the vehicle's own physics. */
@@ -2037,7 +2106,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	 * <li>CARRIER_ACTIVE_MOTHERSHIPS holds strong references to entity instances, and a runway-equipped vehicle re-adds itself every tick - leaving an entry behind kept the whole entity (wake deques and all) alive for the rest of the JVM session ("GC runs but memory doesn't come back"). The wake history is client-side only (see wakeBowHistory's own doc) and is cleared for the same reason.</li>
 	 * <li>Force-loaded chunks (this vehicle's own requests: the Carrier mothership grid, and AircraftEntity's CAS/Carrier grid, which uses the same requester): released - except when the vehicle is just being unloaded with its chunk (RemovalReason.UNLOADED_TO_CHUNK, a server stop in practice, since a vehicle that force-loads keeps its own chunk loaded). The forced chunks are saved with the world then, so it loads back in and requests them again; only this session's bookkeeping is dropped.</li>
 	 * <li>Lock-on highlights this vehicle set on other entities are turned off.</li>
-	 * <li>Anything it was carrying on its deck is released - except on an unload with its chunk (UNLOADED_TO_CHUNK), when the carried vehicles are being unloaded along with it. Its runway tiles are discarded only when it's really destroyed (KILLED/DISCARDED - RemovalReason.shouldDestroy()): on an unload the entity manager is walking the chunk's entities, and on a logout or dimension change the tiles (passengers, possibly) are going along with it - discarding other entities from inside either isn't safe. The tiles clean themselves up anyway (see CarrierRunwayPlatformEntity's own doc).</li>
+	 * <li>Anything it was carrying on its deck is released - except on an unload with its chunk (UNLOADED_TO_CHUNK), when the carried vehicles are being unloaded along with it.</li>
 	 * </ul> */
 	@Override
 	public void onRemovedFromWorld() {
@@ -2045,6 +2114,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		net.minecraft.world.entity.Entity.RemovalReason reason = this.getRemovalReason() != null ? this.getRemovalReason() : net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK;
 		this.tudursvehiclemod$tryExitRemoteControl();
 		CARRIER_ACTIVE_MOTHERSHIPS.remove(this);
+		RunwayDeckCollision.forget(this);
 		this.wakeBowHistory.clear();
 		this.wakeSternHistory.clear();
 		this.wakeSideHistory.clear();
@@ -2066,11 +2136,6 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		this.carrierMothershipForcedChunks = java.util.Set.of();
 		if (reason == net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK) {
 			return;
-		}
-		if (reason.shouldDestroy()) {
-			for (RunwayTileState state : this.runwayTileStates) {
-				tudursvehiclemod$discardAndClearRunwayTiles(serverWorld, state.interior);
-			}
 		}
 		// Motionless, in mid-air after this vehicle (and its own runway) disappeared while still actively carrying it: explicitly releases whatever this vehicle was carrying on its own most recent tick, rather than leaving each one in whatever forced state (hasLifted=false, etc.) it was left in, with no guarantee its own physics would naturally re-evaluate that state correctly once this vehicle itself is simply gone.
 		for (java.util.UUID candidateUuid : this.carrierLastCarriedCandidates) {
@@ -2172,6 +2237,9 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		}
 
 		tudursvehiclemod$updateCustomHitDetection(getDefinition());
+		if (!getDefinition().runways().isEmpty()) {
+			RunwayDeckCollision.markTicking(this);
+		}
 		if (this.level() instanceof ServerLevel contactWorld) {
 			VehicleContacts.tudursvehiclemod$markTicking(this, contactWorld);
 		}
@@ -2198,11 +2266,8 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		if (motionController == null || !motionController.tudursvehiclemod$tickMotion(this)) {
 			updateVehicleMovement(getDefinition());
 		}
-		// This runway's own hatch progress (see updateRunwayHatchProgress()'s own doc) needs to be up to date for THIS tick before tudursvehiclemod$updateCarrierRunwayPlatform() below reads it to place tiles - moved ahead of it (was previously called much later, alongside updateToggleParts()/updateSpinningParts()) specifically so tile placement never reads a one-tick-stale progress value. Runs unconditionally (both sides) regardless of this ordering change - see that method's own doc for why running it here changes nothing else about its own behavior.
+		// Before anything reads the runway positions this tick (the deck carry, RunwayDeckCollision).
 		updateRunwayHatchProgress();
-		if (!this.level().isClientSide()) {
-			this.tudursvehiclemod$updateCarrierRunwayPlatform();
-		}
 		if (!this.level().isClientSide()) {
 			tudursvehiclemod$handleWeightTypeMobCollision(getDefinition());
 			tudursvehiclemod$handleWeightTypeBlockBreaking(getDefinition());
@@ -2519,6 +2584,77 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	/** The actual mechanism driving every spinning_part's visible rotation - defaults to getThrottle(). See HelicopterEntity's own override for why its rotor needs something different. */
 	protected float getSpinningPartSpeedMultiplier() {
 		return getThrottle();
+	}
+
+	/** Sets this vehicle's health directly, held within 0..getMaxHealth(). Nothing else happens: it neither destroys the vehicle at 0 nor revives a destroyed one - for an addon that changes what a vehicle is (and so its maximum health) and has to carry the health over. Server side. */
+	public void tudursvehiclemod$setHealth(float health) {
+		this.entityData.set(HEALTH, Mth.clamp(health, 0f, this.getMaxHealth()));
+	}
+
+	/** Sets this vehicle's fuel directly, held within 0..getMaxFuel() (tudursvehiclemod$addFuel() can only add). Server side. */
+	public void tudursvehiclemod$setFuel(float fuel) {
+		this.entityData.set(FUEL, Mth.clamp(fuel, 0f, this.getMaxFuel()));
+	}
+
+	/** Everything this vehicle keeps per weapon: rounds in the magazine, rounds in reserve (-1 = unlimited), ticks left of the reload under way, which of the weapon's firing positions fires next, heat, and the selected mode. */
+	public record WeaponState(int magazine, int reserve, int reloadTicks, int firingPositionIndex, float heat, int mode) {
+	}
+
+	/** The current state of the weapon at weaponIndex, or null if this vehicle has no such weapon. Server side. */
+	public WeaponState tudursvehiclemod$getWeaponState(int weaponIndex) {
+		this.tudursvehiclemod$ensureWeaponAmmoArraysSized(this.getDefinition());
+		if (weaponIndex < 0 || weaponIndex >= this.weaponAmmo.length) {
+			return null;
+		}
+		return new WeaponState(this.weaponAmmo[weaponIndex], this.weaponReserveAmmo[weaponIndex], this.weaponReloadTicksRemaining[weaponIndex],
+				this.weaponFiringPositionIndex[weaponIndex], this.weaponHeat[weaponIndex], this.weaponMode[weaponIndex]);
+	}
+
+	/** Replaces the state of the weapon at weaponIndex and syncs it to the clients. Ignored if this vehicle has no such weapon. Nothing is checked against the weapon's own limits (magazine size, MaxAmmo). Server side. */
+	public void tudursvehiclemod$setWeaponState(int weaponIndex, WeaponState state) {
+		this.tudursvehiclemod$ensureWeaponAmmoArraysSized(this.getDefinition());
+		if (weaponIndex < 0 || weaponIndex >= this.weaponAmmo.length) {
+			return;
+		}
+		this.weaponAmmo[weaponIndex] = state.magazine();
+		this.weaponReserveAmmo[weaponIndex] = state.reserve();
+		this.weaponReloadTicksRemaining[weaponIndex] = state.reloadTicks();
+		this.weaponFiringPositionIndex[weaponIndex] = state.firingPositionIndex();
+		this.weaponHeat[weaponIndex] = state.heat();
+		this.weaponMode[weaponIndex] = state.mode();
+		this.tudursvehiclemod$syncWeaponAmmo();
+	}
+
+	/** Replaces the state of every weapon at once, one entry per weapon of the CURRENT definition, in order (a missing entry leaves that weapon empty; extra ones are ignored). For an addon whose vehicle changes its weapons while it exists: the per-weapon state is kept by index, so after such a change it has to be put back where each weapon now is. Server side. */
+	public void tudursvehiclemod$setWeaponStates(List<WeaponState> states) {
+		List<WeaponDefinition> weapons = this.getDefinition().weapons();
+		int count = weapons.size();
+		this.weaponAmmo = new int[count];
+		this.weaponReserveAmmo = new int[count];
+		this.weaponReloadTicksRemaining = new int[count];
+		this.weaponFiringPositionIndex = new int[count];
+		this.weaponHeat = new float[count];
+		this.weaponMode = new int[count];
+		for (int i = 0; i < count; i++) {
+			WeaponState state = i < states.size() ? states.get(i) : null;
+			if (state == null) {
+				// The state a new vehicle's weapons start in (see tudursvehiclemod$ensureWeaponAmmoArraysSized()).
+				this.weaponReserveAmmo[i] = weapons.get(i).maxAmmo() > 0 ? 0 : -1;
+				continue;
+			}
+			this.weaponAmmo[i] = state.magazine();
+			this.weaponReserveAmmo[i] = state.reserve();
+			this.weaponReloadTicksRemaining[i] = state.reloadTicks();
+			this.weaponFiringPositionIndex[i] = state.firingPositionIndex();
+			this.weaponHeat[i] = state.heat();
+			this.weaponMode[i] = state.mode();
+		}
+		this.tudursvehiclemod$syncWeaponAmmo();
+	}
+
+	/** The offset of rawYaw from the weapon's default_yaw, taken the short way round and held within [min_yaw, max_yaw] - the clamp every turret here uses, for an addon that overrides weapon aiming and has to agree with it. */
+	public static double tudursvehiclemod$clampYawOffsetFromDefault(double rawYaw, com.example.tudursvehiclemod.asset.WeaponAimRange aimRange) {
+		return tudursvehiclemod$clampedYawOffsetFromDefault(rawYaw, aimRange);
 	}
 
 	/** Public wrapper for getSpinningPartSpeedMultiplier() - see that method's own doc. Needed by client.sound.VehicleEngineSoundManager (a different package) to correct engine sound for a vehicle whose rotor speed doesn't move in lockstep with throttle. */
@@ -2907,10 +3043,14 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		Entity occupant = tudursvehiclemod$resolveWeaponTrackingOccupant(seatIndex, pilotFallback);
 		int cacheKey = tudursvehiclemod$weaponTrackingCacheKey(seatIndex, pilotFallback);
 		float relative;
+		// An external controller's aim for this seat, if it gives one (ExternalMotionController#tudursvehiclemod$aim()).
+		float[] externalAim = null;
 		if (occupant == null) {
 			relative = this.lastTrackedRelativeYawBySeat.getOrDefault(cacheKey, 0f);
 		} else {
-			relative = net.minecraft.util.Mth.wrapDegrees(occupant.getViewYRot(tickProgress) - this.getViewYRot(tickProgress));
+			externalAim = this.tudursvehiclemod$externalAim(occupant, tickProgress);
+			relative = externalAim != null ? net.minecraft.util.Mth.wrapDegrees(externalAim[0])
+					: net.minecraft.util.Mth.wrapDegrees(occupant.getViewYRot(tickProgress) - this.getViewYRot(tickProgress));
 			this.lastTrackedRelativeYawBySeat.put(cacheKey, relative);
 		}
 		if (aimRange == null) {
@@ -2918,7 +3058,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		}
 		if (aimRange.tilt().isTilted()) {
 			// A tilted mount's yaw depends on the view's pitch too, so the pitch is read from the same occupant / cache entry getWeaponAimPitch() uses, and the offset is taken in the tilted frame.
-			float rawPitchForYaw = occupant == null ? this.lastTrackedPitchBySeat.getOrDefault(cacheKey, 0f) : occupant.getViewXRot(tickProgress);
+			float rawPitchForYaw = occupant == null ? this.lastTrackedPitchBySeat.getOrDefault(cacheKey, 0f) : externalAim != null ? externalAim[1] : occupant.getViewXRot(tickProgress);
 			double[] view = tudursvehiclemod$viewInMountFrame(relative, rawPitchForYaw, aimRange);
 			return (float) tudursvehiclemod$clampedYawOffsetFromDefault(view[0], aimRange);
 		}
@@ -2930,10 +3070,11 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		Entity occupant = tudursvehiclemod$resolveWeaponTrackingOccupant(seatIndex, pilotFallback);
 		int cacheKey = tudursvehiclemod$weaponTrackingCacheKey(seatIndex, pilotFallback);
 		float pitch;
+		float[] externalAim = this.tudursvehiclemod$externalAim(occupant, tickProgress);
 		if (occupant == null) {
 			pitch = this.lastTrackedPitchBySeat.getOrDefault(cacheKey, 0f);
 		} else {
-			pitch = occupant.getViewXRot(tickProgress);
+			pitch = externalAim != null ? externalAim[1] : occupant.getViewXRot(tickProgress);
 			this.lastTrackedPitchBySeat.put(cacheKey, pitch);
 		}
 		if (aimRange == null) {
@@ -2944,7 +3085,8 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		if (occupant == null) {
 			rawRelativeYaw = this.lastTrackedRelativeYawBySeat.getOrDefault(cacheKey, 0f);
 		} else {
-			rawRelativeYaw = net.minecraft.util.Mth.wrapDegrees(occupant.getViewYRot(tickProgress) - this.getViewYRot(tickProgress));
+			rawRelativeYaw = externalAim != null ? net.minecraft.util.Mth.wrapDegrees(externalAim[0])
+					: net.minecraft.util.Mth.wrapDegrees(occupant.getViewYRot(tickProgress) - this.getViewYRot(tickProgress));
 		}
 		if (aimRange.tilt().isTilted()) {
 			// In the tilted frame: both view angles are needed to find the pitch there, and the zone is judged by the tilted-frame yaw.
@@ -3278,26 +3420,9 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	private static final EntityDataAccessor<String> SEAT_ASSIGNMENTS =
 			SynchedEntityData.defineId(AbstractVehicleEntity.class, EntityDataSerializers.STRING);
 
-	/** Systematically excludes runway tiles (see CarrierRunwayPlatformEntity's own doc for why they ride this vehicle at all - purely for the same client-side, no-independent-network-sync positioning benefit real seat occupants get, nothing to do with the seat system itself) from every seat/passenger-related computation here: the actual passenger list, filtered down to genuine (non-tile) occupants only. Every seat-index/capacity/occupant-lookup method below uses this instead of the raw getPassengerList(), so tiles riding alongside real passengers never shift seat-index-by-position mappings, never count toward seat capacity, and never appear as a seat "occupant" to any of this vehicle's own seat-dependent systems. */
+	/** The passengers, kept for addons that call it (it used to leave out the runway tiles that rode some vehicles). */
 	public java.util.List<Entity> tudursvehiclemod$getRealPassengerList() {
-		java.util.List<Entity> all = this.getPassengers();
-		boolean anyTile = false;
-		for (Entity e : all) {
-			if (e instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity) {
-				anyTile = true;
-				break;
-			}
-		}
-		if (!anyTile) {
-			return all;
-		}
-		java.util.List<Entity> filtered = new java.util.ArrayList<>(all.size());
-		for (Entity e : all) {
-			if (!(e instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity)) {
-				filtered.add(e);
-			}
-		}
-		return filtered;
+		return this.getPassengers();
 	}
 
 	/** The seat index actually assigned to this passenger right now, or -1 if they're not a recognized passenger. */
@@ -3318,7 +3443,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		if (this.tudursvehiclemod$getRealPassengerList().indexOf(passenger) < 0) {
 			return -1;
 		}
-		Integer seatIndex = tudursvehiclemod$decodeSeatAssignments().get(passenger.getUUID());
+		Integer seatIndex = tudursvehiclemod$seatAssignments().get(passenger.getUUID());
 		return seatIndex != null ? seatIndex : -1;
 	}
 
@@ -3354,26 +3479,42 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		return null;
 	}
 
-	private java.util.Map<java.util.UUID, Integer> tudursvehiclemod$decodeSeatAssignments() {
-		java.util.Map<java.util.UUID, Integer> result = new java.util.LinkedHashMap<>();
+	/** SEAT_ASSIGNMENTS' value with the map decoded from it - see tudursvehiclemod$seatAssignments(). */
+	private record DecodedSeatAssignments(String encoded, java.util.Map<java.util.UUID, Integer> bySeatOccupant) {
+	}
+
+	private DecodedSeatAssignments tudursvehiclemod$decodedSeatAssignments = new DecodedSeatAssignments("", java.util.Map.of());
+
+	/** SEAT_ASSIGNMENTS decoded, read-only. Decoded once per synced value (the same String object until it is set again) rather than on every call: which seat a passenger is in is asked for every seat of every weapon each tick, and again for every frame drawn, and each of those used to split the string and parse every UUID in it. */
+	private java.util.Map<java.util.UUID, Integer> tudursvehiclemod$seatAssignments() {
 		String encoded = this.entityData.get(SEAT_ASSIGNMENTS);
-		if (encoded.isEmpty()) {
-			return result;
-		}
-		for (String entry : encoded.split(",")) {
-			int colonIndex = entry.indexOf(':');
-			if (colonIndex < 0) {
-				continue;
+		DecodedSeatAssignments decoded = this.tudursvehiclemod$decodedSeatAssignments;
+		if (decoded.encoded() != encoded) {
+			java.util.Map<java.util.UUID, Integer> result = new java.util.LinkedHashMap<>();
+			if (!encoded.isEmpty()) {
+				for (String entry : encoded.split(",")) {
+					int colonIndex = entry.indexOf(':');
+					if (colonIndex < 0) {
+						continue;
+					}
+					try {
+						java.util.UUID uuid = java.util.UUID.fromString(entry.substring(0, colonIndex).trim());
+						int seatIndex = Integer.parseInt(entry.substring(colonIndex + 1).trim());
+						result.put(uuid, seatIndex);
+					} catch (IllegalArgumentException ignored) {
+						// Skip a malformed entry rather than letting it corrupt the whole decode.
+					}
+				}
 			}
-			try {
-				java.util.UUID uuid = java.util.UUID.fromString(entry.substring(0, colonIndex).trim());
-				int seatIndex = Integer.parseInt(entry.substring(colonIndex + 1).trim());
-				result.put(uuid, seatIndex);
-			} catch (IllegalArgumentException ignored) {
-				// Skip a malformed entry rather than letting it corrupt the whole decode.
-			}
+			decoded = new DecodedSeatAssignments(encoded, java.util.Collections.unmodifiableMap(result));
+			this.tudursvehiclemod$decodedSeatAssignments = decoded;
 		}
-		return result;
+		return decoded.bySeatOccupant();
+	}
+
+	/** A copy of the seat assignments the caller may change, to encode again (tudursvehiclemod$encodeSeatAssignments()). */
+	private java.util.Map<java.util.UUID, Integer> tudursvehiclemod$decodeSeatAssignments() {
+		return new java.util.LinkedHashMap<>(tudursvehiclemod$seatAssignments());
 	}
 
 	private static String tudursvehiclemod$encodeSeatAssignments(java.util.Map<java.util.UUID, Integer> assignments) {
@@ -3396,8 +3537,25 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 			return;
 		}
 		int seatCount = this.getDefinition().seats().size();
-		java.util.Map<java.util.UUID, Integer> assignments = tudursvehiclemod$decodeSeatAssignments();
 		boolean[] seatTaken = new boolean[seatCount];
+		// The usual case, checked without copying anything: every passenger in a valid seat of its own, and no entries left over.
+		java.util.Map<java.util.UUID, Integer> current = tudursvehiclemod$seatAssignments();
+		if (current.size() == passengers.size()) {
+			boolean consistent = true;
+			for (Entity passenger : passengers) {
+				Integer seatIndex = current.get(passenger.getUUID());
+				if (seatIndex == null || seatIndex < 0 || seatIndex >= seatCount || seatTaken[seatIndex]) {
+					consistent = false;
+					break;
+				}
+				seatTaken[seatIndex] = true;
+			}
+			if (consistent) {
+				return;
+			}
+			java.util.Arrays.fill(seatTaken, false);
+		}
+		java.util.Map<java.util.UUID, Integer> assignments = tudursvehiclemod$decodeSeatAssignments();
 		boolean changed = false;
 		for (Entity passenger : passengers) {
 			Integer seatIndex = assignments.get(passenger.getUUID());
@@ -3480,24 +3638,9 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	/** Tracks the FULL ordered roster of every aircraft launched by a Carrier weapon fired from a given seat index on THIS vehicle (the "mothership"), in launch order (index 0 = the formation's own lead) - set by tudursvehiclemod$fireCarrierLaunch()/tudursvehiclemod$updateCarrierLaunchSequences() at launch time, read by tudursvehiclemod$toggleCarrierSeat() (via tudursvehiclemod$findCurrentCarrierLeader(), which walks this list in order and returns the first entry that's still alive) to find which aircraft to switch a mothership-seated player INTO. This means a destroyed or otherwise-gone LEADER automatically falls through to the next aircraft in launch order, rather than seat-switching simply going inert once the SPECIFIC aircraft it used to point at is gone. Persisted (see tudursvehiclemod$encodeCarrierLinkedAircraftBySeat()/-readCarrierLinkedAircraftBySeat()) so the roster survives a world/chunk reload - a launched aircraft that's already gone (route completed, timed out, destroyed) is simply skipped over when walking the list, never removed from it outright (removing entries would require its own separate cleanup pass for no real benefit, since a gone UUID is already cheap to skip).
 	 */
 	private final java.util.Map<Integer, java.util.List<java.util.UUID>> carrierLinkedAircraftBySeat = new java.util.HashMap<>();
-	/** Bundles the interior tile list/missing-ticks map and two one-shot logging flags into one holder, so a runway's own tracking state stays entirely self-contained rather than needing parallel arrays threaded through every runway-related method. See runwayTileStates' own doc for how one of these is obtained per runway. */
-	private static final class RunwayTileState {
-		final java.util.List<java.util.UUID> interior = new java.util.ArrayList<>();
-		final java.util.Map<Integer, Integer> interiorMissingTicks = new java.util.HashMap<>();
-	}
-
-	/** Per RunwayTileState's own doc: one entry per this vehicle's own def.runways() index, created lazily (see tudursvehiclemod$getOrCreateRunwayTileState()) the first time each runway is actually processed, rather than all at once - a vehicle whose runway list is still being populated during loading, or briefly inconsistent for any other reason, never needs every index to already exist up front. */
-	private final java.util.List<RunwayTileState> runwayTileStates = new java.util.ArrayList<>();
-
-	/** Grows runwayTileStates on demand so index `runwayIndex` is always valid to read/write afterwards - see that field's own doc for why lazy rather than pre-sized. */
-	private RunwayTileState tudursvehiclemod$getOrCreateRunwayTileState(int runwayIndex) {
-		while (this.runwayTileStates.size() <= runwayIndex) {
-			this.runwayTileStates.add(new RunwayTileState());
-		}
-		return this.runwayTileStates.get(runwayIndex);
-	}
-
-	/** Purely from the mothership's own already-synced/interpolated position/yaw (see CarrierRunwayPlatformEntity's own client-side tick() for the full reasoning) - a standalone reimplementation of the exact same grid-layout formula tudursvehiclemod$updateCarrierRunwayPlatform()'s own positionFunc lambda already uses for the server's own authoritative placement, kept here as a separate, self-contained static method (rather than refactoring the server's own already-verified hot path to call it) specifically to avoid risking any behavioral change to that already-tested code. If this project's own tile-layout formula is ever changed, BOTH copies need updating together. Returns null if tileIndex is out of range for the tile count this runway/tileSize combination actually produces (columns*rows) - e.g. a stale tile index left over from before a runway's own configured size last changed. */
+	/** Where the tile at tileIndex of runway's grid sits (the centre of its top face), from vehicle's current position and yaw. The runway surface no longer uses tiles (see RunwayDeckCollision); kept so callers outside this mod keep working.
+	 * @deprecated nothing in this mod uses it any more */
+	@Deprecated
 	public static net.minecraft.world.phys.Vec3 tudursvehiclemod$computeCarrierRunwayTileWorldPosClientSide(
 			AbstractVehicleEntity vehicle, com.example.tudursvehiclemod.asset.RunwayDefinition runway, float tileSize, int tileIndex) {
 		double minZ = Math.min(runway.startZ(), runway.endZ());
@@ -3525,12 +3668,8 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		return new net.minecraft.world.phys.Vec3(worldX, surfaceWorldY, worldZ);
 	}
 
-	/** Runway tile collision became unstable specifically in a real (Overworld) world under load, but not in Superflat - and that the mothership's own runway itself worked fine before the landing/recovery-related changes, implicating something newer (this self-heal feature, added since): tileIndex -> how many CONSECUTIVE ticks that tile has been confirmed missing (its own expected chunk loaded, but the entity itself absent) - see tudursvehiclemod$updateCarrierRunwayPlatform()'s own self-heal doc for why a single confirmed-missing tick alone isn't trusted; a chunk that JUST finished loading may have its own blocks ready before its own entity-tracking has fully caught up, which could otherwise read as a false-positive "genuinely gone" on that first tick even though the original tile is still actually there and about to reappear. */
-	private static final int CARRIER_RUNWAY_MISSING_DEBOUNCE_TICKS = 40;
 	/** Jittery/jerky carried-entity motion - see tudursvehiclemod$carryRunwayDeckEntities()'s own doc for the full reasoning: the maximum magnitude (blocks) the acceleration-compensation term there can contribute in any single axis, regardless of how large a single-tick delta anomaly (e.g. the Y-coordinate settle-and-snap) happens to be. 0.1 blocks/tick^2 comfortably covers a genuinely accelerating ship's own typical acceleration while suppressing amplification of a much smaller (typically ~0.01 block) but still-discontinuous single-tick anomaly. */
 	private static final double CARRIER_ACCEL_COMPENSATION_MAX_BLOCKS = 0.1;
-	/** Runway tiles were unstable specifically right after a fresh mothership spawn - see the initial-spawn loop's own doc in tudursvehiclemod$updateCarrierRunwayPlatform() for the full reasoning: how many new tiles are spawned per tick during that initial burst, instead of the entire remaining backlog at once. */
-	private static final int CARRIER_RUNWAY_TILES_SPAWNED_PER_TICK = 4;
 	/** Motionless, in mid-air after this vehicle (and its own runway) was removed while still actively carrying it: which candidates this vehicle carried on its own most recent tick - consulted in onRemove() to explicitly release each one (see tudursvehiclemod$releaseCarriedCandidate()'s own doc) rather than leaving them in whatever forced state (hasLifted=false, etc.) they were left in, with no guarantee their own physics would ever naturally re-evaluate that state correctly once this vehicle itself is simply gone. Replaced wholesale each tick (see tudursvehiclemod$carryRunwayDeckEntities()'s own doc), not incrementally updated.
 	 */
 	private java.util.Set<java.util.UUID> carrierLastCarriedCandidates = java.util.Set.of();
@@ -3611,10 +3750,6 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 
 	@Override
 	protected void removePassenger(Entity passenger) {
-		if (passenger instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity) {
-			super.removePassenger(passenger);
-			return;
-		}
 		// These synced input fields are only ever written by an incoming network packet FROM the controlling player - nothing ever reset them back to neutral once that player actually dismounts, so whatever they were last holding (e.g. still pressing A/D at the exact moment of dismounting) could persist as a stale, nonzero value indefinitely into the unmanned state. Checked BEFORE super.removePassenger() actually performs the removal, since getControllingPassenger() needs passenger to still be in the list to correctly identify them as the (about to be former) pilot. Excludes a DummyPilotEntity specifically - see this method's own doc for why zeroing here on its removal is actively wrong rather than merely unneeded.
 		if (passenger.equals(this.getControllingPassenger()) && !(passenger instanceof com.example.tudursvehiclemod.entity.DummyPilotEntity)) {
 			this.setSyncedSidewaysInput(0f);
@@ -4257,7 +4392,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 			// Let the client predict a successful interaction (swing animation etc.); the server performs the actual pack-up and is the source of truth.
 			return InteractionResult.SUCCESS;
 		}
-		if (this.getPassengers().stream().anyMatch(p -> !(p instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity))) {
+		if (!this.getPassengers().isEmpty()) {
 			player.displayClientMessage(Component.translatable("message.tudursvehiclemod.occupied"), true);
 			return InteractionResult.FAIL;
 		}
@@ -6701,214 +6836,9 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	}
 
 	/** STAGE 1 ONLY - always fully autonomous, identical to CAS's own in-flight behavior once airborne (reuses AircraftEntity's own casWaypointOverride/casAttackFlags/casForcedChunks/casTimeoutTicksRemaining/casStuckTimeoutTicks fields and tudursvehiclemod$updateDroneWaypointAutopilot()/tudursvehiclemod$updateCasAutoFire() methods as-is - there is no Carrier-specific autopilot at all in this stage). The one meaningful difference from tudursvehiclemod$fireCasStrike(): spawnPos is given directly (this weapon's own AddWeapon mount position, already computed by the caller) rather than derived from the route's own first waypoint - a carrier aircraft launches FROM the firing vehicle itself, not at a distant point. The marked ground point (targetPos) still serves as the route's own relative-coordinate center exactly like CAS's own target point does, so the SAME weapon file's own route format/rotation/accuracy-perturbation logic works completely unchanged. Faces toward the route's own first waypoint (rather than CAS's own "waypoint 0 -> waypoint 1" facing, since here the aircraft actually has to fly TO waypoint 0 first, unlike CAS where it spawns AT waypoint 0's own position already). */
-	/** Avoids duplicating onRemove()'s own discard-and-clear loop four times (once per border side) - discards every entity in tiles (if still present) and clears the list. No-op if already empty. */
-	private static void tudursvehiclemod$discardAndClearRunwayTiles(ServerLevel serverWorld, java.util.List<java.util.UUID> tiles) {
-		if (tiles.isEmpty()) {
-			return;
-		}
-		for (java.util.UUID platformUuid : tiles) {
-			Entity platformEntity = serverWorld.getEntity(platformUuid);
-			if (platformEntity != null) {
-				platformEntity.discard();
-			}
-		}
-		tiles.clear();
-	}
-
-	/** See carrierMothershipForcedChunks's own doc - called once per tick (server-side only) from tick() itself. A no-op (returns immediately) for the overwhelming majority of vehicles that have never fired a Carrier weapon at all, so this costs nothing for anything else. */
-	/** For each of this vehicle's own Carrier weapons, looks for a player-piloted aircraft matching that weapon's own configured aircraftFileName, sitting essentially stationary, within ANY of that weapon's own recovery zones (the original AddWeapon-centered zone, PLUS any configured extraRecoveryPoints - see CarrierAircraftConfig's own doc) - and if that weapon's own ammo capacity (magazine + reserve + in-flight, same accounting tryResupplyWeapon() itself uses) has room for one more, converts it: despawns the aircraft, adds +1 directly to that weapon's own magazine (same tudursvehiclemod$replenishWeaponAmmo() a genuine return-to-base landing itself uses), and relocates its own pilot to the lowest-numbered currently-empty seat on THIS vehicle - or simply dismounts them (leaving them standing where the aircraft was) if every seat is already occupied. At most one conversion per weapon per tick, regardless of how many of its own zones have a qualifying candidate. */
-	/** DIRECT test confirming push-based collision genuinely requires a LivingEntity (not just isPushable()=true on a bare Entity, which was mistakenly assumed confirmed working from an EARLIER test that turned out to have actually been against a LivingEntity-based Shulker-style attempt, not the later bare-Entity redesign) - see CarrierRunwayPlatformEntity's own doc for the full reasoning: tiles this runway with a 2-D GRID of FIXED-size CarrierRunwayPlatformEntity instances (both across the runway's own width and along its own length - see TILE_SIZE's own doc), rather than one row of custom-sized tiles (impossible on a LivingEntity subclass at all, since both of Entity's own size-overriding mechanisms are confirmed final there). No-op if this vehicle has no runway configured. */
-	// The constant that used to live here (matching registry.ModEntityTypes's own single CARRIER_RUNWAY_PLATFORM registration) has been replaced by tudursvehiclemod$selectCarrierRunwayTileType() below, choosing per-runway from several registered discrete sizes instead of always reading one shared value.
-
-	/** Runway tile size follows a SPECIFIC runway's own configured width, with 1.0 available as an even smaller option - see ModEntityTypes' own CARRIER_RUNWAY_TILE_SIZES doc for why this can only choose from a small set of pre-registered discrete sizes rather than truly continuous scaling, and for the tile-count tradeoff a very small size carries on a long runway: returns the LARGEST registered variant (checking the original "carrier_runway_platform" id's own size too, alongside the newer smaller-variant array) whose own width still fits within runwayWidth, so the 3-column formula's own boundary-anchoring property holds. Falls back to the SMALLEST registered variant if even that doesn't fit (a runway narrower than every registered size) - the columns==1 special case in the caller then bounds the resulting overhang to that smallest variant's own unavoidable minimum. */
-	/** That fix only ever capped the BORDER tile at a confirmed-safe 6.0, never the interior tiles (the base CARRIER_RUNWAY_PLATFORM, or CARRIER_RUNWAY_PLATFORM_SMALLER_VARIANTS' own larger entries), which could still select and use an oversized, unsafe tile. tudursvehiclemod$selectCarrierRunwayTileType() below now filters its own candidate pool to this same safe maximum before picking the largest fit - necessarily increasing tile count for wider runways compared to before (reversing part of an earlier deliberate tile-count-reduction effort), but correctness (not falling through the world) takes priority over that optimization. */
-	private static final float SAFE_MAX_RUNWAY_TILE_SIZE = 6.0f;
-
-	private static net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> tudursvehiclemod$selectCarrierRunwayTileType(double runwayWidth) {
-		@SuppressWarnings("unchecked")
-		net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> best =
-				com.example.tudursvehiclemod.registry.ModEntityTypes.CARRIER_RUNWAY_PLATFORM;
-		float bestFittingSize = -1f;
-		if (best.getWidth() <= SAFE_MAX_RUNWAY_TILE_SIZE && best.getWidth() <= runwayWidth) {
-			bestFittingSize = best.getWidth();
-		} else {
-			best = null;
-		}
-		net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> smallest = null;
-		for (net.minecraft.world.entity.EntityType<?> rawVariant : com.example.tudursvehiclemod.registry.ModEntityTypes.CARRIER_RUNWAY_PLATFORM_SMALLER_VARIANTS) {
-			@SuppressWarnings("unchecked")
-			net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> variant =
-					(net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity>) rawVariant;
-			if (variant.getWidth() > SAFE_MAX_RUNWAY_TILE_SIZE) {
-				continue;
-			}
-			if (smallest == null || variant.getWidth() < smallest.getWidth()) {
-				smallest = variant;
-			}
-			if (variant.getWidth() <= runwayWidth && variant.getWidth() > bestFittingSize) {
-				best = variant;
-				bestFittingSize = variant.getWidth();
-			}
-		}
-		if (smallest == null) {
-			// Every registered variant (interior AND smaller-variant array) exceeded SAFE_MAX_RUNWAY_TILE_SIZE - shouldn't normally happen given CARRIER_RUNWAY_TILE_SIZES' own smallest entries, but falls back to the border tile's own confirmed-safe size directly rather than ever returning null.
-			return com.example.tudursvehiclemod.registry.ModEntityTypes.CARRIER_RUNWAY_BORDER_PLATFORM;
-		}
-		// Nothing safe actually fits within this runway's own width at all - falls back to the smallest safe variant, per this method's own doc.
-		return bestFittingSize < 0f ? smallest : best;
-	}
-
-	private void tudursvehiclemod$updateCarrierRunwayPlatform() {
-		VehicleDefinition def = this.getDefinition();
-		if (def.runways().isEmpty()) {
-			return;
-		}
-		if (!(this.level() instanceof ServerLevel serverWorld)) {
-			return;
-		}
-		// Rather than continuing to be maintained/repositioned indefinitely while it sinks (previously only actually cleaned up via onRemove() once the mothership itself is finally fully removed, much later).
-		if (this.tudursvehiclemod$isDestroyed()) {
-			for (RunwayTileState state : this.runwayTileStates) {
-				tudursvehiclemod$discardAndClearRunwayTiles(serverWorld, state.interior);
-			}
-			return;
-		}
-		// Processes each in turn, using that runway's own dedicated RunwayTileState (see that class's own doc) rather than one shared set of tracking collections - everything below is otherwise identical to the original single-runway behaviour, just repeated once per runway.
-		for (int runwayIndex = 0; runwayIndex < def.runways().size(); runwayIndex++) {
-			com.example.tudursvehiclemod.asset.RunwayDefinition baseRunway = def.runways().get(runwayIndex);
-			RunwayTileState state = this.tudursvehiclemod$getOrCreateRunwayTileState(runwayIndex);
-			// Per RunwayDefinition's own hatchGated doc (rotation-type hatch, e.g. a landing craft's own bow ramp): this runway simply doesn't exist at all while its own hatch is closed - no partial/mid-swing tracking of any kind. Discards any tiles left over from before it last closed, then skips this runway entirely for the rest of this tick.
-			if (baseRunway.hatchGated() && !this.isHatchOpen()) {
-				tudursvehiclemod$discardAndClearRunwayTiles(serverWorld, state.interior);
-				continue;
-			}
-			// Per RunwayDefinition's own hatchOffsetX/Y/Z doc (slide-type hatch, e.g. a carrier's own elevator deck): bakes this tick's own hatch progress into a NEW, offset-adjusted RunwayDefinition - a no-op whenever this runway has no hatch offset configured at all (see that method's own doc). Kept as a SEPARATE final variable (rather than reassigning baseRunway) since positionFunc below is a lambda, and lambdas can only capture effectively-final locals - every computation below reads centerX()/heightY()/startZ()/endZ() from THIS variable, so nothing further needs to change to pick up the offset.
-			final com.example.tudursvehiclemod.asset.RunwayDefinition runway = baseRunway.tudursvehiclemod$withHatchProgress(this.tudursvehiclemod$getRunwayHatchProgress(runwayIndex));
-
-			double minZ = Math.min(runway.startZ(), runway.endZ());
-			double maxZ = Math.max(runway.startZ(), runway.endZ());
-			double length = maxZ - minZ;
-			double halfWidth = runway.width() / 2.0;
-			// Picks whichever registered discrete size (see ModEntityTypes' own CARRIER_RUNWAY_TILE_SIZES doc) best fits THIS runway, rather than always using one single global size - restores the 3-column formula's own boundary-anchoring property (see its own doc below) for any runway at least as wide as the smallest registered variant, instead of only ones wider than whatever the server-wide "expected width" config happens to be set to.
-			net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> tileType = tudursvehiclemod$selectCarrierRunwayTileType(runway.width());
-			float tileSize = tileType.getWidth();
-			// Fixed-size, axis-aligned tiles positioned along the ship's own rotated local grid don't perfectly tile edge-to-edge as the rotation changes; spacing tile CENTERS closer together than the tile's own actual size (0.7x) creates genuine overlap to close those gaps, at the cost of more tiles for the same runway area.
-			double carrierRunwayTileSpacing = tileSize * 0.7;
-			// The 3-column placement formula anchors its own OUTER tile edges to the runway's own configured half-width ONLY when the tile size fits within the runway's own full width - once the tile size exceeds the runway's own width, (width - tileSize) goes negative and the outer tiles' own FAR edges are no longer anchored to anything, growing unbounded with tile size instead. Falls back to a SINGLE centered tile in that case - now only actually needed for a runway narrower than even the SMALLEST registered variant (see tudursvehiclemod$selectCarrierRunwayTileType()'s own doc), since per-runway size selection above already avoids this for anything wider than that.
-			int columns = Math.max(1, (int) Math.ceil(runway.width() / carrierRunwayTileSpacing));
-			int rows = Math.max(1, (int) Math.ceil(length / carrierRunwayTileSpacing));
-			int tileCount = columns * rows;
-
-			double combinedYawRad = Math.toRadians(this.getYRot());
-			double forwardX = -Math.sin(combinedYawRad);
-			double forwardZ = Math.cos(combinedYawRad);
-			double rightX = forwardZ;
-			double rightZ = -forwardX;
-			double surfaceWorldY = this.getY() + runway.heightY();
-
-
-			this.tudursvehiclemod$updateCarrierRunwayTileSet(
-					serverWorld, tileType, tileSize, tileCount, runwayIndex,
-					i -> {
-						int col = i % columns;
-						int row = i / columns;
-						// Evenly spaced tile centers across the runway's own width/length - a single column/row sits at the midpoint; more than one spans edge to edge with equal gaps, so adjacent tiles' own edges meet/slightly overlap rather than leaving gaps, regardless of how evenly the selected tile size actually divides the runway's own actual width/length.
-						double tileLocalX = columns == 1 ? runway.centerX() : runway.centerX() - halfWidth + tileSize / 2.0 + col * ((runway.width() - tileSize) / Math.max(1, columns - 1));
-						double tileLocalZ = rows == 1 ? (minZ + maxZ) / 2.0 : minZ + tileSize / 2.0 + row * ((length - tileSize) / Math.max(1, rows - 1));
-						return new double[] {this.getX() + tileLocalX * rightX + tileLocalZ * forwardX, this.getY(), this.getZ() + tileLocalX * rightZ + tileLocalZ * forwardZ};
-					},
-					surfaceWorldY, state.interior, state.interiorMissingTicks, CARRIER_RUNWAY_TILES_SPAWNED_PER_TICK);
-		}
-	}
-
-
-	/** Spawns up to spawnBudget new tiles for any index in [trackingList.size(), tileCount) whose own target chunk is currently loaded, then walks every already-tracked index, self-healing (same CARRIER_RUNWAY_MISSING_DEBOUNCE_TICKS-debounced logic as before) any that's gone missing or repositioning/zeroing velocity for any still alive. Returns how many new tiles were actually spawned this call. */
-	private int tudursvehiclemod$updateCarrierRunwayTileSet(ServerLevel serverWorld,
-			net.minecraft.world.entity.EntityType<com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity> entityType, float tileSize, int tileCount, int runwayIndex,
-			java.util.function.IntFunction<double[]> positionFunc, double surfaceWorldY,
-			java.util.List<java.util.UUID> trackingList, java.util.Map<Integer, Integer> missingTicksMap, int spawnBudget) {
-		int tilesSpawnedThisTick = 0;
-		// This vehicle's own coordinates (typically thousands of blocks from world origin) mean a fresh entity's own DEFAULT position (0,0,0) is essentially guaranteed to fall inside a completely unrelated, unloaded chunk - constructing it there, THEN spawning it, THEN only repositioning it correctly afterward may have left it briefly un-tracked or otherwise mishandled before ever reaching its own real position at all. Every new tile's own correct position is set BEFORE it's ever added to the world at all, so it never exists anywhere else first.
-		// Spawns at most spawnBudget NEW tiles per tick instead of the full remaining backlog all at once, spreading the load across several ticks rather than potentially dozens of entities all within a single one, right when the surrounding chunks may not have fully settled yet.
-		for (int i = trackingList.size(); i < tileCount && tilesSpawnedThisTick < spawnBudget; i++) {
-			double[] pos = positionFunc.apply(i);
-			double worldX = pos[0];
-			double worldZ = pos[2];
-			// Skips (without counting against the per-tick budget) a tile whose own target chunk isn't loaded yet, retrying it on a later tick instead of ever spawning into a chunk that may still be generating.
-			net.minecraft.world.level.ChunkPos targetChunk = new net.minecraft.world.level.ChunkPos(net.minecraft.core.BlockPos.containing(worldX, surfaceWorldY, worldZ));
-			if (!serverWorld.areEntitiesLoaded(targetChunk.toLong())) {
-				continue;
-			}
-			try {
-				com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity platform =
-						new com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity(entityType, serverWorld);
-				platform.moveTo(worldX, surfaceWorldY - entityType.getHeight(), worldZ, 0f, 0f);
-				platform.setInvisible(true);
-				platform.setInvulnerable(true);
-				platform.setSilent(true);
-				platform.setNoGravity(true);
-				// This entity is a MobEntity descendant again (see CarrierRunwayPlatformEntity's own doc) and therefore subject to MobEntity's own natural distance-based despawning unless explicitly opted out - this call was correctly present in an earlier bare-Entity version of this design (where it didn't even exist, being MobEntity-specific) but was never re-added after switching back to a MobEntity-based one.
-				platform.setPersistenceRequired();
-				platform.tudursvehiclemod$setMothership(this.getUUID());
-				// This tile's own identity (which mothership, which runway, which grid index) needs to be known client-side too, since the position FORMULA itself is already client-computable (VehicleDefinition/RunwayDefinition are ordinary client-visible data) but WHICH runway/index this specific tile instance represents is not, without this.
-				platform.tudursvehiclemod$setTileIdentity(this.getId(), runwayIndex, i);
-				boolean spawned = serverWorld.addFreshEntity(platform);
-				if (!spawned) {
-					break;
-				}
-				trackingList.add(platform.getUUID());
-				tilesSpawnedThisTick++;
-			} catch (Exception e) {
-				org.slf4j.LoggerFactory.getLogger("VehicleMod/Carrier").error(
-						"[Carrier] Runway platform tile spawn threw an exception: entity id={}, entityType={}", this.getId(), entityType, e);
-				break;
-			}
-		}
-
-		for (int i = 0; i < tileCount && i < trackingList.size(); i++) {
-			Entity platformEntity = serverWorld.getEntity(trackingList.get(i));
-			double[] pos = positionFunc.apply(i);
-			double worldX = pos[0];
-			double worldZ = pos[2];
-			if (!(platformEntity instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity platform) || platform.isRemoved()) {
-				// Only actually regenerates once a tile has been CONFIRMED missing (its own expected chunk loaded, entity still absent) for CARRIER_RUNWAY_MISSING_DEBOUNCE_TICKS consecutive ticks in a row, not on the very first observation - filters out a transient false-positive (a chunk that just finished loading may have its own blocks ready before its own entity-tracking has fully caught up).
-				net.minecraft.world.level.ChunkPos expectedChunk = new net.minecraft.world.level.ChunkPos(net.minecraft.core.BlockPos.containing(worldX, surfaceWorldY, worldZ));
-				if (!serverWorld.areEntitiesLoaded(expectedChunk.toLong())) {
-					// Own chunk isn't even loaded - genuinely can't tell if this tile still exists or not (very likely does, just untracked right now). Resets any partial debounce progress rather than letting it accumulate across an unrelated gap.
-					missingTicksMap.remove(i);
-					continue;
-				}
-				int missingTicks = missingTicksMap.getOrDefault(i, 0) + 1;
-				if (missingTicks < CARRIER_RUNWAY_MISSING_DEBOUNCE_TICKS) {
-					missingTicksMap.put(i, missingTicks);
-					continue;
-				}
-				missingTicksMap.remove(i);
-				try {
-					com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity healedPlatform =
-							new com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity(entityType, serverWorld);
-					healedPlatform.moveTo(worldX, surfaceWorldY - entityType.getHeight(), worldZ, 0f, 0f);
-					healedPlatform.setInvisible(true);
-					healedPlatform.setInvulnerable(true);
-					healedPlatform.setSilent(true);
-					healedPlatform.setNoGravity(true);
-					healedPlatform.setPersistenceRequired();
-					healedPlatform.tudursvehiclemod$setMothership(this.getUUID());
-					healedPlatform.tudursvehiclemod$setTileIdentity(this.getId(), runwayIndex, i);
-					if (serverWorld.addFreshEntity(healedPlatform)) {
-						trackingList.set(i, healedPlatform.getUUID());
-					}
-				} catch (Exception e) {
-					org.slf4j.LoggerFactory.getLogger("VehicleMod/Carrier").error(
-							"[Carrier] Runway platform tile self-heal threw an exception: entity id={}, entityType={}, tileIndex={}", this.getId(), entityType, i, e);
-				}
-				continue;
-			}
-			missingTicksMap.remove(i);
-			platform.setPos(worldX, surfaceWorldY - entityType.getHeight(), worldZ);
-			platform.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-		}
-		return tilesSpawnedThisTick;
+	/** The edge length of the runway's collision boxes (see RunwayDeckCollision) for a runway this wide: 6 blocks, or 1 for a runway narrower than that - the sizes the runway tiles used to come in. */
+	static float tudursvehiclemod$runwayTileSize(double runwayWidth) {
+		return runwayWidth >= 6.0 ? 6.0f : 1.0f;
 	}
 
 	/** Sets velocity to compensate for this vehicle's own per-tick translation/rotation (plus acceleration prediction, since the velocity set here isn't consumed until the candidate's own NEXT physics tick) for every entity standing on the runway. No persistent per-entity state or damping - recomputed fresh each tick from actual current position. No-op if this vehicle has no runway or hasn't moved/turned this tick. */
@@ -6998,8 +6928,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		// AbstractVehicleEntity extends Entity directly, NOT LivingEntity - searching only LivingEntity meant a parked vehicle could never be found as a candidate in the first place. Same (LivingEntity OR AbstractVehicleEntity) filter checkEntityCrashDamage() already uses elsewhere in this file.
 		// Previously also excluded an AircraftEntity under "active Carrier control" via tudursvehiclemod$isUnderActiveCarrierControl() - that method had been permanently hardcoded to return false (for the full history of why), making this clause a permanent no-op with zero effect on the actual candidate set. Removed entirely, along with that now-unused method, rather than leaving inert dead code in place.
 		java.util.List<Entity> candidates = this.level().getEntities(this, searchBox,
-				e -> (e instanceof LivingEntity || e instanceof AbstractVehicleEntity)
-						&& !(e instanceof com.example.tudursvehiclemod.entity.CarrierRunwayPlatformEntity) && e.getVehicle() == null);
+				e -> (e instanceof LivingEntity || e instanceof AbstractVehicleEntity) && e.getVehicle() == null);
 			for (Entity candidate : candidates) {
 				if (carriedThisTick.contains(candidate.getUUID())) {
 					// An entity already carried by an EARLIER runway this same tick (e.g. standing near the boundary between two decks) is not re-processed against a LATER one - its own displacement for this tick has already been fully applied.
@@ -7013,6 +6942,10 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 						&& localZ >= minZ - 2.0 && localZ <= maxZ + 2.0;
 				boolean atSurfaceHeight = Math.abs(candidate.getY() - prevSurfaceY) < 1.2;
 				if (!withinFootprint || !atSurfaceHeight) {
+					continue;
+				}
+				if (candidate instanceof net.minecraft.server.level.ServerPlayer) {
+					// A player is carried by its own client (client.RunwayDeckCarry), as part of its ordinary movement. Teleporting it from here every tick made the server drop the player's own movement until each teleport was acknowledged, so walking on a moving deck barely got anywhere.
 					continue;
 				}
 				carriedThisTick.add(candidate.getUUID());
@@ -7036,12 +6969,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 				double rawCarryX = deltaX + tangentialX + runwayHatchDeltaWorldX;
 				double rawCarryY = currentSurfaceY - candidate.getY();
 				double rawCarryZ = deltaZ + tangentialZ + runwayHatchDeltaWorldZ;
-				if (candidate instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-					// Ordinary player walking is driven directly by their own client-side input/position packets, not the server-side velocity field the way a mob/vehicle's own movement is - velocity alone was never going to reliably carry a player at all. requestTeleport() with this same incremental delta is what actually forces/syncs a player's own state reliably, for both position and rotation together.
-					serverPlayer.connection.teleport(
-							candidate.getX() + rawCarryX, candidate.getY() + rawCarryY, candidate.getZ() + rawCarryZ,
-							candidate.getYRot() + deltaYaw, candidate.getXRot());
-				} else if (candidate instanceof AbstractVehicleEntity parkedVehicle) {
+				if (candidate instanceof AbstractVehicleEntity parkedVehicle) {
 					// Applied immediately, on top of whatever (typically minimal, for a normally-parked vehicle) movement the candidate's own physics already produced this tick - no dependency on the candidate's own tick() ever consuming a velocity value through its own code paths at all.
 					candidate.move(net.minecraft.world.entity.MoverType.SELF, new net.minecraft.world.phys.Vec3(rawCarryX, rawCarryY, rawCarryZ));
 					// That version's own fix for the SAME "jerky old-position-vs-new-position alternation" symptom being reported now also set candidate.setVelocity() here, but CRITICALLY also set candidate.velocityDirty = true immediately after - a step this project's own earlier reintroduction attempt (this session) omitted, which may explain why it appeared to have no positive effect. That attempt was reverted after a direct report of large position disruption, but that regression coincided with a SEPARATELY-added early-tick velocity-zeroing hook (since removed entirely) - the interaction between that hook and setVelocity(), not setVelocity() itself, was the more likely cause. Safe to retry now: the early-zero hook is gone, and wheel-spin/crawler-track animation suppression (tudursvehiclemod$updateWheelSpinPhase()/tudursvehiclemod$updateCrawlerTrackPhase(), see their own doc) is fully decoupled from velocity, so this value is never consumed as self-propelled momentum by anything - it exists purely so entity-tracking sync actually includes a velocity update for observing/riding clients to smooth/extrapolate with, which plain move() alone does not guarantee.
@@ -8060,7 +7988,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 			return;
 		}
 		VehicleDefinition def = this.getDefinition();
-		java.util.Set<Integer> currentTargetIds = new java.util.HashSet<>();
+		java.util.Set<Integer> currentTargetIds = java.util.Set.of();
 		for (int weaponIndex = 0; weaponIndex < def.weapons().size(); weaponIndex++) {
 			WeaponDefinition weapon = def.weapons().get(weaponIndex);
 			com.example.tudursvehiclemod.asset.CustomWeaponBehavior customBehavior = weapon.weaponType() == com.example.tudursvehiclemod.asset.WeaponType.CUSTOM
@@ -8091,6 +8019,9 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 			}
 			Entity target = isCustomLockOn ? customBehavior.resolveLockTarget(this, shooter, weapon) : tudursvehiclemod$findLockOnTarget(shooter, weapon);
 			if (target != null) {
+				if (currentTargetIds.isEmpty()) {
+					currentTargetIds = new java.util.HashSet<>();
+				}
 				currentTargetIds.add(target.getId());
 				tudursvehiclemod$setEntityHighlighted(target, true);
 				// See missileLockRequiredTicks's own doc for why this is recomputed every tick rather than snapshotted once at lock-start.
@@ -8124,8 +8055,17 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 			}
 		}
 		this.tudursvehiclemod$previousLockOnTargetIds = currentTargetIds;
+		// With nothing being locked, the two synced strings come out the same every tick (zeros, and each weapon's own LockTime): written once, then only refreshed now and then (a /reload can change LockTime) instead of being built again on every tick by every vehicle.
+		boolean nothingLocking = this.tudursvehiclemod$missileLockProgressTicks.isEmpty() && this.tudursvehiclemod$missileLockRequiredTicks.isEmpty();
+		if (nothingLocking && this.tudursvehiclemod$missileLockSyncIdle && this.tickCount % 20 != 0) {
+			return;
+		}
 		this.tudursvehiclemod$syncMissileLockProgress();
+		this.tudursvehiclemod$missileLockSyncIdle = nothingLocking;
 	}
+
+	/** Whether MISSILE_LOCK_SYNC/MISSILE_LOCK_REQUIRED_SYNC already hold the "nothing is locking" state - see tudursvehiclemod$updateMissileLockOnIndicators(). */
+	private boolean tudursvehiclemod$missileLockSyncIdle;
 
 	/** How far (blocks) tudursvehiclemod$findCarrierLaunchTarget() searches, and the half-angle (degrees) of the cone around the shooter's own view it searches - the same values an airborne Carrier lead's own lock-candidate search uses (AircraftEntity#CARRIER_LOCK_SEARCH_RANGE / CARRIER_LOCK_ON_CONE_DEGREES), so aiming at a target to launch against feels exactly like aiming at one to send a wingman after. */
 	private static final double CARRIER_LAUNCH_TARGET_RANGE = 1000.0;
@@ -8153,7 +8093,6 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		for (Entity candidate : this.level().getEntities(shooter, searchBox,
 				e -> (e instanceof net.minecraft.world.entity.LivingEntity living && living.isAlive()
 						|| e instanceof AbstractVehicleEntity vehicleCandidate && !vehicleCandidate.tudursvehiclemod$isDestroyed())
-						&& !(e instanceof CarrierRunwayPlatformEntity)
 						&& e != this && e != shooter.getVehicle()
 						&& !ownLaunched.contains(e.getUUID()))) {
 			Vec3 toCandidate = candidate.position().subtract(eyePos);
@@ -8263,36 +8202,31 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 
 	/** Current lock progress (ticks - see tudursvehiclemod$missileLockProgressTicks's own doc) for weaponIndex, read from MISSILE_LOCK_SYNC. Public so client.hud.HudVariables can show it. 0 for every weapon type that isn't actually AAMissile/ATMissile at all, or if nothing's currently being tracked. */
 	public int tudursvehiclemod$getMissileLockProgress(int weaponIndex) {
-		String raw = this.entityData.get(MISSILE_LOCK_SYNC);
-		if (raw.isEmpty()) {
-			return 0;
-		}
-		String[] parts = raw.split(",");
-		if (weaponIndex < 0 || weaponIndex >= parts.length) {
-			return 0;
-		}
-		try {
-			return Integer.parseInt(parts[weaponIndex]);
-		} catch (NumberFormatException e) {
-			return 0;
-		}
+		int[] values = tudursvehiclemod$parseSyncedInts(this.entityData.get(MISSILE_LOCK_SYNC));
+		return weaponIndex < 0 || weaponIndex >= values.length || values[weaponIndex] == Integer.MIN_VALUE ? 0 : values[weaponIndex];
 	}
 
 	/** The distance-aware REQUIRED tick count (see tudursvehiclemod$missileLockRequiredTicks's own doc) for weaponIndex, read from MISSILE_LOCK_REQUIRED_SYNC. Public so client.hud.HudVariables can compute a correct lock_progress fraction against it. Falls back to weapon.lockTimeTicks() itself (the caller's own responsibility to pass it, since this class alone can't resolve a WeaponDefinition from an index without one) if nothing's synced yet at all. */
 	public int tudursvehiclemod$getMissileLockRequiredTicks(int weaponIndex, int fallback) {
-		String raw = this.entityData.get(MISSILE_LOCK_REQUIRED_SYNC);
+		int[] values = tudursvehiclemod$parseSyncedInts(this.entityData.get(MISSILE_LOCK_REQUIRED_SYNC));
+		return weaponIndex < 0 || weaponIndex >= values.length || values[weaponIndex] == Integer.MIN_VALUE ? fallback : values[weaponIndex];
+	}
+
+	/** A synced "n,n,.." string as numbers (Integer.MIN_VALUE where an entry isn't one), for the two lock getters above. */
+	private static int[] tudursvehiclemod$parseSyncedInts(String raw) {
 		if (raw.isEmpty()) {
-			return fallback;
+			return new int[0];
 		}
 		String[] parts = raw.split(",");
-		if (weaponIndex < 0 || weaponIndex >= parts.length) {
-			return fallback;
+		int[] values = new int[parts.length];
+		for (int i = 0; i < parts.length; i++) {
+			try {
+				values[i] = Integer.parseInt(parts[i]);
+			} catch (NumberFormatException e) {
+				values[i] = Integer.MIN_VALUE;
+			}
 		}
-		try {
-			return Integer.parseInt(parts[weaponIndex]);
-		} catch (NumberFormatException e) {
-			return fallback;
-		}
+		return values;
 	}
 
 	/** Public wrapper for CustomWeaponBehavior's own default resolveLockTarget() to reuse - see that
@@ -8559,7 +8493,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	/** Per the same request as tudursvehiclemod$updateSupplyToNearbyVehicles()'s own doc: refills THIS vehicle's own weapon ammo, called on the RECIPIENT by a nearby supplier - the magazine first, then (once the magazine is full) the reserve. Refilling only the magazine was an oversight (it went unnoticed because it was only ever tested with reserve-less vehicles): a vehicle that had also used up its reserve never got it back from a supplier at all, and a Drone Center's own AUTO_RESUME - which waits for magazine + reserve to be completely full again - could then never resume.
 	 *
 	 * Capacity follows tudursvehiclemod$tryResupplyWeapon()'s own rules exactly: for a weapon with a finite reserve (reserve >= 0 and MaxAmmo > 0) magazine + reserve + Carrier aircraft still in flight never exceeds MaxAmmo (the total capacity, magazine included); an unlimited reserve (-1) or a weapon without MaxAmmo only ever has its magazine topped up, same as before. Per-interval pacing: SUPPLY_AMMO_FRACTION_PER_INTERVAL of the magazine size for the magazine (unchanged), and the same fraction of MaxAmmo for the reserve - floored at 1 so small numbers still make progress. Syncs the ammo display once at the end, only if anything changed. */
-	private void tudursvehiclemod$receiveAmmoSupply() {
+	public void tudursvehiclemod$receiveAmmoSupply() {
 		VehicleDefinition def = this.getDefinition();
 		this.tudursvehiclemod$ensureWeaponAmmoArraysSized(def);
 		boolean changed = false;
@@ -8618,7 +8552,7 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 	private static final float SUPPLY_AMMO_FRACTION_PER_INTERVAL = 0.1f;
 
 	/** Per the same request as tudursvehiclemod$updateSupplyToNearbyVehicles()'s own doc: restores part of THIS vehicle's own health, called on the RECIPIENT by a nearby supplier. Sets HEALTH directly, exactly as the existing iron-ingot repair path does (see tudursvehiclemod$tryRepair()'s own use of the same field), so both routes to healing behave identically. */
-	private void tudursvehiclemod$receiveHealthSupply() {
+	public void tudursvehiclemod$receiveHealthSupply() {
 		float maxHealth = this.getMaxHealth();
 		float current = this.getHealth();
 		if (current >= maxHealth) {
@@ -9566,19 +9500,51 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 						+ Math.pow(wholeMesh.maxZ() - wholeMesh.minZ(), 2))
 				* scale;
 		// Candidates by the path each projectile flew on its last move (tudursvehiclemod$lastMove()), not by where it is now: a fast shell is outside a box around the vehicle both before and after the tick it passes through. See LoadedProjectiles's doc. The move is taken HERE and carried with the candidate, and that very move is what gets checked - see HitCandidate's doc.
-		Vec3 vehiclePos = this.position();
-		List<HitCandidate> candidates = new java.util.ArrayList<>();
-		for (net.minecraft.world.entity.projectile.Projectile projectile : LoadedProjectiles.in(serverWorld)) {
-			if (projectile.isRemoved() || tudursvehiclemod$wasFiredByThisVehicle(projectile)) {
+		// Plain arithmetic on the coordinates, and nothing allocated until a projectile really is a candidate: this runs for every loaded projectile, for every vehicle, every tick, and nearly all of them are nowhere near. The move is the one tudursvehiclemod$lastMove() gives.
+		double reachSquared = meshDiagonal * meshDiagonal;
+		double vehicleX = this.getX();
+		double vehicleY = this.getY();
+		double vehicleZ = this.getZ();
+		List<HitCandidate> candidates = null;
+		for (net.minecraft.world.entity.projectile.Projectile projectile : LoadedProjectiles.loaded(serverWorld)) {
+			if (projectile.isRemoved()) {
 				continue;
 			}
-			Vec3[] move = tudursvehiclemod$lastMove(projectile);
-			Vec3 segment = move[1].subtract(move[0]);
-			if (tudursvehiclemod$distanceToSegment(vehiclePos, move[0], segment, segment.length()) <= meshDiagonal) {
-				candidates.add(new HitCandidate(projectile, move[0], move[1]));
+			double toX = projectile.getX();
+			double toY = projectile.getY();
+			double toZ = projectile.getZ();
+			double fromX = projectile.xo;
+			double fromY = projectile.yo;
+			double fromZ = projectile.zo;
+			double moveX = toX - fromX;
+			double moveY = toY - fromY;
+			double moveZ = toZ - fromZ;
+			double moveSquared = moveX * moveX + moveY * moveY + moveZ * moveZ;
+			Vec3 velocity = projectile.getDeltaMovement();
+			double plausible = velocity.length() * 2.0 + 4.0;
+			if (moveSquared > plausible * plausible) {
+				moveX = velocity.x;
+				moveY = velocity.y;
+				moveZ = velocity.z;
+				fromX = toX - moveX;
+				fromY = toY - moveY;
+				fromZ = toZ - moveZ;
+				moveSquared = moveX * moveX + moveY * moveY + moveZ * moveZ;
 			}
+			double along = moveSquared < 1.0e-12 ? 0.0
+					: Mth.clamp(((vehicleX - fromX) * moveX + (vehicleY - fromY) * moveY + (vehicleZ - fromZ) * moveZ) / moveSquared, 0.0, 1.0);
+			double nearX = fromX + moveX * along - vehicleX;
+			double nearY = fromY + moveY * along - vehicleY;
+			double nearZ = fromZ + moveZ * along - vehicleZ;
+			if (nearX * nearX + nearY * nearY + nearZ * nearZ > reachSquared || tudursvehiclemod$wasFiredByThisVehicle(projectile)) {
+				continue;
+			}
+			if (candidates == null) {
+				candidates = new java.util.ArrayList<>();
+			}
+			candidates.add(new HitCandidate(projectile, new Vec3(fromX, fromY, fromZ), new Vec3(toX, toY, toZ)));
 		}
-		if (candidates.isEmpty()) {
+		if (candidates == null) {
 			return;
 		}
 
@@ -10021,33 +9987,6 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		this.entityData.set(HATCH_OPEN, view.getBooleanOr("HatchOpen", true));
 		// Per CANOPY_OPEN's own doc: same fallback default as HatchOpen's own (true) for a save predating this split - such a save's own "HatchOpen" value already represented both hatch and canopy together, so both should start from that same value on first load after the split, then diverge independently from there on.
 		this.entityData.set(CANOPY_OPEN, view.getBooleanOr("CanopyOpen", view.getBooleanOr("HatchOpen", true)));
-		// Restores this vehicle's own previously-spawned tile UUIDs, so tudursvehiclemod$updateCarrierRunwayPlatform() can find and simply reposition/resize them again instead of creating an entirely new batch.
-		//
-		// Index 0 keeps the ORIGINAL, unsuffixed key names (so a save from before this change loads unchanged, with no migration needed at all), while index 1 and beyond use a "..Runway{N}" suffix. Walked until a completely absent index is hit, rather than reading this vehicle's own runways().size() - the actual VehicleDefinition isn't necessarily resolved yet at this point in loading, and an absent key naturally means "nothing more was ever saved here" regardless.
-		for (int runwayIndex = 0; ; runwayIndex++) {
-			String suffix = runwayIndex == 0 ? "" : "Runway" + runwayIndex;
-			String interiorKey = "CarrierRunwayPlatformEntities" + suffix;
-			String interiorIds = view.getStringOr(interiorKey, "");
-			// BorderLeftIds is still read here purely to preserve this loop's own existing continuation check (an old save with only border data but no interior data at some index should still be recognized as "something was saved here") - no longer decoded/stored anywhere, since border tiles aren't separately tracked at all anymore.
-			String borderLeftIds = view.getStringOr("CarrierRunwayBorderPlatformEntitiesLeft" + suffix, "");
-			if (interiorIds.isEmpty() && borderLeftIds.isEmpty()) {
-				break;
-			}
-			RunwayTileState state = this.tudursvehiclemod$getOrCreateRunwayTileState(runwayIndex);
-			tudursvehiclemod$decodeRunwayTileIds(interiorIds, state.interior);
-		}
-	}
-
-	/** Appends every UUID in encoded (same comma-separated format tudursvehiclemod$encodeRunwayTileIds() below produces) onto target. No-op if encoded is empty. */
-	private static void tudursvehiclemod$decodeRunwayTileIds(String encoded, java.util.List<java.util.UUID> target) {
-		if (encoded.isEmpty()) {
-			return;
-		}
-		for (String idString : encoded.split(",")) {
-			if (!idString.isEmpty()) {
-				target.add(java.util.UUID.fromString(idString));
-			}
-		}
 	}
 
 	@Override
@@ -10097,28 +10036,8 @@ public abstract class AbstractVehicleEntity extends Entity implements MeshedEnti
 		view.putBoolean("WingFoldOpen", this.entityData.get(WING_FOLD_OPEN));
 		view.putBoolean("HatchOpen", this.entityData.get(HATCH_OPEN));
 		view.putBoolean("CanopyOpen", this.entityData.get(CANOPY_OPEN));
-		// Per readCustomData()'s own doc for the "index 0 stays unsuffixed" backward-compatibility scheme.
-		for (int runwayIndex = 0; runwayIndex < this.runwayTileStates.size(); runwayIndex++) {
-			RunwayTileState state = this.runwayTileStates.get(runwayIndex);
-			String suffix = runwayIndex == 0 ? "" : "Runway" + runwayIndex;
-			tudursvehiclemod$encodeRunwayTileIds(state.interior, s -> view.putString("CarrierRunwayPlatformEntities" + suffix, s));
-		}
 	}
 
-	/** Joins ids as a comma-separated string (same format tudursvehiclemod$decodeRunwayTileIds() above expects) and hands it to writer - a no-op (writer never called) if ids is empty, so nothing is written at all rather than an empty string. */
-	private static void tudursvehiclemod$encodeRunwayTileIds(java.util.List<java.util.UUID> ids, java.util.function.Consumer<String> writer) {
-		if (ids.isEmpty()) {
-			return;
-		}
-		StringBuilder sb = new StringBuilder();
-		for (int i = 0; i < ids.size(); i++) {
-			if (i > 0) {
-				sb.append(',');
-			}
-			sb.append(ids.get(i));
-		}
-		writer.accept(sb.toString());
-	}
 
 	private static String tudursvehiclemod$encodeIntArray(int[] array) {
 		StringBuilder sb = new StringBuilder();

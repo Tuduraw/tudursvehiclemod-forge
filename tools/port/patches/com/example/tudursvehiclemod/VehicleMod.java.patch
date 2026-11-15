@@ -1,6 +1,6 @@
 --- a/com/example/tudursvehiclemod/VehicleMod.java
 +++ b/com/example/tudursvehiclemod/VehicleMod.java
-@@ -220,7 +220,7 @@
+@@ -224,7 +224,7 @@
  					return true;
  				});
  			} else if (blockEntity instanceof com.example.tudursvehiclemod.block.FireSupportCenterBlockEntity fireSupportCenter

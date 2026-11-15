@@ -1,6 +1,29 @@
 --- a/com/example/tudursvehiclemod/client/render/VehicleEntityRenderer.java
 +++ b/com/example/tudursvehiclemod/client/render/VehicleEntityRenderer.java
-@@ -1425,32 +1425,16 @@
+@@ -1060,14 +1060,20 @@
+ 		int verticesPerFace = tris.verticesPerFace();
+ 		org.joml.Vector3f position = new org.joml.Vector3f();
+ 		org.joml.Vector3f normal = new org.joml.Vector3f();
++		// 1.20.1: no Pose#transformNormal (the normal matrix does it), and the all-attributes vertex() takes the colour as floats.
++		org.joml.Matrix3f normalMatrix = matrixEntry.normal();
++		float red = ((tintColor >> 16) & 0xFF) / 255f;
++		float green = ((tintColor >> 8) & 0xFF) / 255f;
++		float blue = (tintColor & 0xFF) / 255f;
++		float alpha = ((tintColor >>> 24) & 0xFF) / 255f;
+ 		for (int vertex = 0; vertex < vertexCount; vertex++) {
+ 			int base = vertex * ObjModel.Triangles.FLOATS_PER_VERTEX;
+ 			if (vertex % verticesPerFace == 0) {
+ 				int normalBase = (vertex / verticesPerFace) * 3;
+-				matrixEntry.transformNormal(faceNormals[normalBase], faceNormals[normalBase + 1], faceNormals[normalBase + 2], normal);
++				normalMatrix.transform(faceNormals[normalBase], faceNormals[normalBase + 1], faceNormals[normalBase + 2], normal).normalize();
+ 			}
+ 			pose.transformPosition(data[base], data[base + 1], data[base + 2], position);
+-			vertexConsumer.vertex(position.x, position.y, position.z, tintColor, data[base + 3], data[base + 4], overlay, light,
++			vertexConsumer.vertex(position.x, position.y, position.z, red, green, blue, alpha, data[base + 3], data[base + 4], overlay, light,
+ 					normal.x, normal.y, normal.z);
+ 		}
+ 	}
+@@ -1407,32 +1413,16 @@
  		// Leaving transparent parts (a plant's cross-shaped texture, glass, etc) untouched ("あくまでブロックの不透過テクスチャ部分のみを対象とし、透過部分に対しては影響を与えないようにすることは可能ですか"): earlier this wrapper discarded the block model's own UV entirely and substituted a fixed one, which meant the fragment shader's own texture(Sampler0, texCoord0) sampled the SAME single texel for every vertex regardless of where on the block's own texture that vertex actually was - there was no way for a transparent part of the texture to ever be sampled, so nothing could suppress the overlay there. Passing the model's own REAL UV through instead lets that same shader-level sampling do the actual work: a transparent texel's own near-zero alpha multiplies through exactly the way its colour does, suppressing the overlay there natively - no separate transparency check has to be written, because the vanilla-standard "colour = texture * vertexColor" multiply this pipeline already does is precisely that check.
  		//
  		// Buffers each element as it's set rather than emitting immediately on vertex(x,y,z): a VertexConsumer's own contract is that position often arrives first with the rest following before the implicit "next vertex" boundary, so submitting on vertex() (as this used to) meant every OTHER call - color, texture, overlay, light, normal - arrived too late to matter and was silently discarded. Buffering until whichever call happens to arrive last for this vertex, then flushing once all pending fields have real values, uses the model's own real texture coordinates instead of ignoring them.
@@ -38,7 +61,7 @@
  				return this;
  			}
  
-@@ -1458,24 +1442,17 @@
+@@ -1440,24 +1430,17 @@
  			public com.mojang.blaze3d.vertex.VertexConsumer uv(float u, float v) {
  				pendingU = u;
  				pendingV = v;
@@ -65,7 +88,7 @@
  				return this;
  			}
  
-@@ -1490,9 +1467,21 @@
+@@ -1472,9 +1455,21 @@
  			}
  
  			@Override

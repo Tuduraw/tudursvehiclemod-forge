@@ -1,6 +1,6 @@
 --- a/com/example/tudursvehiclemod/registry/ModEntityTypes.java
 +++ b/com/example/tudursvehiclemod/registry/ModEntityTypes.java
-@@ -121,7 +121,7 @@
+@@ -105,7 +105,7 @@
  		if (trackingTickInterval != null) {
  			builder.updateInterval(trackingTickInterval);
  		}

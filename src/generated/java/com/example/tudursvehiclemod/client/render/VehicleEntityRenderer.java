@@ -1046,30 +1046,36 @@ public class VehicleEntityRenderer extends EntityRenderer<AbstractVehicleEntity,
 		if (tris.isEmpty()) {
 			return;
 		}
+		queue.submitCustomGeometry(matrices, layer, (matrixEntry, vertexConsumer) ->
+				tudursvehiclemod$emit(matrixEntry, vertexConsumer, tris, light, overlay, tintColor));
+	}
+
+	/** Writes one packed chunk into the buffer. Each vertex goes in through the single all-attributes addVertex() call (the form the buffer writes fastest), and a face's normal is transformed once for the face rather than once for each of its corners - the result is the same as setting the attributes one by one. */
+	private static void tudursvehiclemod$emit(PoseStack.Pose matrixEntry, com.mojang.blaze3d.vertex.VertexConsumer vertexConsumer,
+			ObjModel.Triangles tris, int light, int overlay, int tintColor) {
+		Matrix4f pose = matrixEntry.pose();
 		float[] data = tris.data();
 		float[] faceNormals = tris.faceNormals();
 		int vertexCount = tris.vertexCount();
-		// Unpacked ONCE here rather than re-unpacked for every single vertex.
-		int colorA = (tintColor >> 24) & 0xFF;
-		int colorR = (tintColor >> 16) & 0xFF;
-		int colorG = (tintColor >> 8) & 0xFF;
-		int colorB = tintColor & 0xFF;
-		// The geometry already carries whatever shape the pipeline expects - four vertices per face on a QUADS pipeline (a quad as authored, or a triangle with its own last vertex repeated), three on a TRIANGLES one - so this loop just walks it. The padding branch that used to live here is gone: repeating a vertex is now done once when the model is packed, not on every frame of every vehicle. See ObjModel.Triangles.pack()'s own doc.
 		int verticesPerFace = tris.verticesPerFace();
-		queue.submitCustomGeometry(matrices, layer, (matrixEntry, vertexConsumer) -> {
-			Matrix4f pose = matrixEntry.pose();
-
-			for (int vertex = 0; vertex < vertexCount; vertex++) {
-				int base = vertex * ObjModel.Triangles.FLOATS_PER_VERTEX;
+		org.joml.Vector3f position = new org.joml.Vector3f();
+		org.joml.Vector3f normal = new org.joml.Vector3f();
+		// 1.20.1: no Pose#transformNormal (the normal matrix does it), and the all-attributes vertex() takes the colour as floats.
+		org.joml.Matrix3f normalMatrix = matrixEntry.normal();
+		float red = ((tintColor >> 16) & 0xFF) / 255f;
+		float green = ((tintColor >> 8) & 0xFF) / 255f;
+		float blue = (tintColor & 0xFF) / 255f;
+		float alpha = ((tintColor >>> 24) & 0xFF) / 255f;
+		for (int vertex = 0; vertex < vertexCount; vertex++) {
+			int base = vertex * ObjModel.Triangles.FLOATS_PER_VERTEX;
+			if (vertex % verticesPerFace == 0) {
 				int normalBase = (vertex / verticesPerFace) * 3;
-				vertexConsumer.vertex(pose, data[base], data[base + 1], data[base + 2])
-						.color(colorR, colorG, colorB, colorA)
-						.uv(data[base + 3], data[base + 4])
-						.overlayCoords(overlay)
-						.uv2(light)
-						.normal(matrixEntry.normal(), faceNormals[normalBase], faceNormals[normalBase + 1], faceNormals[normalBase + 2]).endVertex();
+				normalMatrix.transform(faceNormals[normalBase], faceNormals[normalBase + 1], faceNormals[normalBase + 2], normal).normalize();
 			}
-		});
+			pose.transformPosition(data[base], data[base + 1], data[base + 2], position);
+			vertexConsumer.vertex(position.x, position.y, position.z, red, green, blue, alpha, data[base + 3], data[base + 4], overlay, light,
+					normal.x, normal.y, normal.z);
+		}
 	}
 
 	/** Submits SEVERAL geometry chunks through ONE draw command, for the specific case where they all share the exact same transform.
@@ -1086,27 +1092,9 @@ public class VehicleEntityRenderer extends EntityRenderer<AbstractVehicleEntity,
 		if (totalVertices == 0) {
 			return;
 		}
-		int colorA = (tintColor >> 24) & 0xFF;
-		int colorR = (tintColor >> 16) & 0xFF;
-		int colorG = (tintColor >> 8) & 0xFF;
-		int colorB = tintColor & 0xFF;
 		queue.submitCustomGeometry(matrices, layer, (matrixEntry, vertexConsumer) -> {
-			Matrix4f pose = matrixEntry.pose();
 			for (ObjModel.Triangles part : parts) {
-				float[] data = part.data();
-				float[] faceNormals = part.faceNormals();
-				int vertexCount = part.vertexCount();
-				int verticesPerFace = part.verticesPerFace();
-				for (int vertex = 0; vertex < vertexCount; vertex++) {
-					int base = vertex * ObjModel.Triangles.FLOATS_PER_VERTEX;
-					int normalBase = (vertex / verticesPerFace) * 3;
-					vertexConsumer.vertex(pose, data[base], data[base + 1], data[base + 2])
-							.color(colorR, colorG, colorB, colorA)
-							.uv(data[base + 3], data[base + 4])
-							.overlayCoords(OverlayTexture.NO_OVERLAY)
-							.uv2(light)
-							.normal(matrixEntry.normal(), faceNormals[normalBase], faceNormals[normalBase + 1], faceNormals[normalBase + 2]).endVertex();
-				}
+				tudursvehiclemod$emit(matrixEntry, vertexConsumer, part, light, OverlayTexture.NO_OVERLAY, tintColor);
 			}
 		});
 	}

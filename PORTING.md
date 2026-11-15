@@ -25,13 +25,13 @@ tools/port/      生成ツール一式 (port.py / build_cross.py / rules.json / 
 LOOM_JAVA_HOME=/path/to/jdk21 python3 tools/port/port.py generate --mojmap ../tudursvehiclemod-mojmap
 
 # 2. Forge 版をビルド
-JAVA_HOME=/path/to/jdk17 ./gradlew build          # -> build/libs/tudursvehiclemod-1.1.1-forge-1.20.1.jar
+JAVA_HOME=/path/to/jdk17 ./gradlew build          # -> build/libs/tudursvehiclemod-1.1.2-forge-1.20.1.jar
 JAVA_HOME=/path/to/jdk17 ./gradlew harnessJar     # -> build/libs/tvmtest-forge-0.1.jar (テスト用)
 ```
 
 jar 名は `tudursvehiclemod-<mod_version>-<mod_loader>-<minecraft_version>.jar` です (`gradle.properties` の
-`mod_version`・`mod_loader`・`minecraft_version`)。`mods.toml` のバージョンは `mod_version` (`1.1.1`) のままです。
-Fabric 版 (`tudursvehiclemod-1.1.1-fabric-1.21.11.jar`) と同じ規則です。
+`mod_version`・`mod_loader`・`minecraft_version`)。`mods.toml` のバージョンは `mod_version` (`1.1.2`) のままです。
+Fabric 版 (`tudursvehiclemod-1.1.2-fabric-1.21.11.jar`) と同じ規則です。
 
 `port.py refresh` は Loom を動かさずに、前回の変換結果へ rules と patches だけを掛け直します
 (rules.json を変えたとき用)。作業フォルダは `.port/` (`gradlew clean` では消えません)。
@@ -95,6 +95,17 @@ mixin は他のソースと同様に生成・変換し、1.20.1 向けにパッ�
 `forge/mixin/client/MoveEntityCodecForgeMixin` は、自分が操縦している乗り物についても、サーバーから届く差分の位置の
 基準 (`VecDeltaCodec`) を更新します (1.21.2 以降のバニラと同じ動き。下記「修正 (2026-11-01、サーバー負荷の調査)」)。
 Forge では `@ModifyArgs` が使えない (生成クラスが読み込めない) ため、引数の書き換えは `@ModifyArg` で行っています。
+
+1.1.2 で増えたもの:
+
+- `RunwayDeckCollisionMixin` (滑走路の床を当たり判定に加える): Fabric 版はインターフェース `EntityGetter` の
+  `getEntityCollisions` に `@Inject` しますが、Forge 1.20.1 の Mixin はインターフェースへの注入ができず、1.20.1 では
+  このメソッドが `EntityGetter` の既定メソッドにしかありません (`Level`・`ServerLevel`・`ClientLevel` のどれも上書きしない)。
+  そこで `Level` に上書きメソッドを足し、1.20.1 の既定メソッドと同じ処理の結果に滑走路の床を加えています (パッチ)。
+  `src/forge/resources/tudursvehiclemod.mixins.json` は生成の対象外なので、このとき手で追加しました。
+  確認: 専用サーバーで滑走路付きの船を出し、甲板の上から落とした防具立ては甲板の高さで止まり、外に落としたものは地面まで落ちる
+- `client/render/VehicleEntityRenderer` (1.1.2 で書き直された頂点の書き出し): 1.20.1 の `PoseStack.Pose` には
+  `transformNormal` が無いので法線行列 (`normal()`) で変換し、全属性の `vertex()` には色を 4 つの float で渡します (パッチ)
 
 ## 試作で確認したこと (2026-10-31)
 
