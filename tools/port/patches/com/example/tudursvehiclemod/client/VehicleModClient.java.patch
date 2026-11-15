@@ -9,7 +9,7 @@
  			return result;
  		}
  		int seatIndex = vehicle.tudursvehiclemod$getAssignedSeatIndex(player);
-@@ -704,7 +704,7 @@
+@@ -706,7 +706,7 @@
  			// server round-trip at all.
  			if (cameraSwitchKey.consumeClick()) {
  				if (client.player != null
@@ -18,7 +18,7 @@
  					int seatIndex = vehicle.tudursvehiclemod$getAssignedSeatIndex(client.player);
  					vehicle.tudursvehiclemod$cycleCameraPosition(seatIndex);
  				}
-@@ -718,7 +718,7 @@
+@@ -720,7 +720,7 @@
  
  			if (gearToggleKey.consumeClick()) {
  				if (client.player != null
@@ -27,7 +27,7 @@
  					// CRITICAL: also toggle directly on the client's own local copy, not just send it to the server.
  					vehicle.toggleLandingGear();
  					ClientPlayNetworking.send(new GearTogglePayload());
-@@ -757,7 +757,7 @@
+@@ -759,7 +759,7 @@
  				if (manualModeHeldTicks == MANUAL_MODE_HOLD_TICKS && !manualModeToggledThisHold) {
  					manualModeToggledThisHold = true;
  					if (client.player != null
@@ -36,7 +36,7 @@
  						boolean newManualMode = !manualVehicle.isManualMode();
  						manualVehicle.setManualMode(newManualMode);
  						ClientPlayNetworking.send(new ManualModePayload(newManualMode));
-@@ -789,7 +789,7 @@
+@@ -791,7 +791,7 @@
  				if (currentFreeLook != lastFreeLookState) {
  					lastFreeLookState = currentFreeLook;
  					if (tudursvehiclemod$getClientEffectiveVehicle(client.player) instanceof com.example.tudursvehiclemod.entity.FreeCameraVehicle
@@ -45,7 +45,7 @@
  									instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
  						// Resets the player's own yaw/pitch to match the vehicle's current facing, both when
  						// free-look STARTS (so it begins from the current facing rather than resuming wherever
-@@ -822,7 +822,7 @@
+@@ -824,7 +824,7 @@
  				// server-side network handler), so diving/ascending applied
  				// correctly on the server but never visually moved the
  				// entity on screen.
@@ -54,7 +54,7 @@
  						instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity levelVehicle) {
  					levelVehicle.setSyncedLevelAscendInput(currentLevelAscend);
  					levelVehicle.setSyncedLevelDescendInput(currentLevelDescend);
-@@ -858,7 +858,7 @@
+@@ -860,7 +860,7 @@
  					currentThrottleInput = client.player.zza;
  					currentSidewaysInput = client.player.xxa;
  				}
@@ -63,7 +63,7 @@
  					throttleVehicle.setSyncedThrottleInput(currentThrottleInput);
  					throttleVehicle.setSyncedSidewaysInput(currentSidewaysInput);
  				}
-@@ -873,7 +873,7 @@
+@@ -875,7 +875,7 @@
  				// vehicle here otherwise (unlike helicopters, which use a
  				// dedicated descend key instead - see README's own doc).
  				boolean currentBrake = client.options.keyJump.isDown();

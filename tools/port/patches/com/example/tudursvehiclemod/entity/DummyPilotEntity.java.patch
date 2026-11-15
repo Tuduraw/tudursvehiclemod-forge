@@ -1,6 +1,6 @@
 --- a/com/example/tudursvehiclemod/entity/DummyPilotEntity.java
 +++ b/com/example/tudursvehiclemod/entity/DummyPilotEntity.java
-@@ -285,6 +285,11 @@
+@@ -295,6 +295,11 @@
  	}
  
  	@Override

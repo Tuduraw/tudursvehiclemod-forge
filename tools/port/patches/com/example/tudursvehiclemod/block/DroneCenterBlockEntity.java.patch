@@ -1,6 +1,6 @@
 --- a/com/example/tudursvehiclemod/block/DroneCenterBlockEntity.java
 +++ b/com/example/tudursvehiclemod/block/DroneCenterBlockEntity.java
-@@ -491,7 +491,7 @@
+@@ -498,7 +498,7 @@
  		this.orbitAltitude = orbitAltitude;
  		this.radiusMultiplier = radiusMultiplier;
  		this.setChanged();
@@ -9,7 +9,7 @@
  				instanceof com.example.tudursvehiclemod.entity.AbstractVehicleEntity vehicle) {
  			vehicle.tudursvehiclemod$setDroneLink(this.getBlockPos(), speedFraction, orbitAltitude, radiusMultiplier);
  		}
-@@ -644,7 +644,7 @@
+@@ -651,7 +651,7 @@
  		if (previousBoundId == null || previousBoundId.equals(newBoundId) || !(this.getLevel() instanceof ServerLevel serverWorld)) {
  			return;
  		}
@@ -18,7 +18,7 @@
  			previousVehicle.tudursvehiclemod$setDroneLink(null);
  		}
  		this.tudursvehiclemod$releaseFormationWingmen(serverWorld);
-@@ -1043,7 +1043,7 @@
+@@ -1050,7 +1050,7 @@
  			this.tudursvehiclemod$onBoundStickChanged(previousBoundId);
  			UUID newBoundId = this.tudursvehiclemod$getBoundVehicleId();
  			if (newBoundId != null && !newBoundId.equals(previousBoundId) && this.getLevel() instanceof ServerLevel serverWorld
@@ -27,7 +27,7 @@
  				this.homePoint = new DroneWaypoint(
  						(int) Math.floor(vehicle.getX()) - this.getBlockPos().getX(),
  						(int) Math.floor(vehicle.getY()) - this.getBlockPos().getY(),
-@@ -1154,7 +1154,7 @@
+@@ -1161,7 +1161,7 @@
  		this.formationSpacing = view.getDoubleOr("FormationSpacing", 8.0);
  		this.formationElementSpacing = view.getDoubleOr("FormationElementSpacing", -1.0);
  		this.formationSlots = NonNullList.withSize(Math.max(0, this.formationSize - 1), ItemStack.EMPTY);
@@ -36,7 +36,7 @@
  	}
  
  	@Override
-@@ -1214,7 +1214,7 @@
+@@ -1221,7 +1221,7 @@
  		view.putDouble("FormationSpacing", this.formationSpacing);
  		view.putDouble("FormationElementSpacing", this.formationElementSpacing);
  		if (!this.formationSlots.isEmpty()) {
